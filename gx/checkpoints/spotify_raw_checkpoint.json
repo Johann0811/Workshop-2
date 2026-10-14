@@ -1,0 +1,12 @@
+{
+  "actions": [],
+  "id": "08aa1d07-14cb-44ec-b32f-175f4ba06c3f",
+  "name": "spotify_raw_checkpoint",
+  "result_format": "SUMMARY",
+  "validation_definitions": [
+    {
+      "id": "24bec579-dbcb-4008-8f90-14a88990f65d",
+      "name": "spotify_raw_validation"
+    }
+  ]
+}

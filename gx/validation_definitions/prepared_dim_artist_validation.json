@@ -1,0 +1,22 @@
+{
+  "data": {
+    "asset": {
+      "id": "23356940-0f2f-4e7d-a5ac-6e6c01ab779f",
+      "name": "prepared_dim_artist_asset"
+    },
+    "batch_definition": {
+      "id": "622448dc-9487-4495-8c71-f1fc732e5831",
+      "name": "prepared_dim_artist_batch"
+    },
+    "datasource": {
+      "id": "523a0b4e-780a-4fd8-82e2-c18109e9f9ee",
+      "name": "prepared_dim_artist_source"
+    }
+  },
+  "id": "1cd6e409-f27c-4571-9238-27927130a843",
+  "name": "prepared_dim_artist_validation",
+  "suite": {
+    "id": "1fa4e531-ded3-4016-a7d7-50893a015473",
+    "name": "prepared_dim_artist"
+  }
+}

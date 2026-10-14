@@ -1,0 +1,47 @@
+---
+config:
+  look: classic
+  theme: dark
+---
+erDiagram
+
+    DIM_TRACK  ||--o{ FACT_TRACK_GENRE : describes
+    DIM_ARTIST ||--o{ FACT_TRACK_GENRE : describes
+    DIM_GENRE  ||--o{ FACT_TRACK_GENRE : describes
+
+    DIM_TRACK {
+        int track_key PK
+        string track_id UK
+        string track_name
+        string album_name
+        string artists_raw
+        int n_artists
+    }
+
+    DIM_ARTIST {
+        int artist_key PK
+        string artist_key_norm UK
+        string artist_name
+        int grammy_wins_1958_2018
+        int grammy_records_2019
+        string grammy_status
+        boolean has_grammy_record
+        string wins_band
+    }
+
+    DIM_GENRE {
+        int genre_key PK
+        string track_genre UK
+    }
+
+    FACT_TRACK_GENRE {
+        int track_key PK, FK
+        int genre_key PK, FK
+        int artist_key FK
+        int popularity
+        boolean is_top10_global
+        boolean is_zero_traction
+        int source_row_id
+        string etl_batch_id
+        datetime loaded_at
+    }

@@ -1,0 +1,12 @@
+{
+  "actions": [],
+  "id": "eef665b1-9ab8-4a1f-a08e-2cee7a758bb7",
+  "name": "prepared_dim_track_checkpoint",
+  "result_format": "SUMMARY",
+  "validation_definitions": [
+    {
+      "id": "5081ca1e-a43d-484f-a08b-795616ee8abf",
+      "name": "prepared_dim_track_validation"
+    }
+  ]
+}

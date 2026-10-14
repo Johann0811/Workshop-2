@@ -1,0 +1,12 @@
+{
+  "actions": [],
+  "id": "50feaeca-97c5-4184-8c0a-98ad39fa339d",
+  "name": "prepared_dim_genre_checkpoint",
+  "result_format": "SUMMARY",
+  "validation_definitions": [
+    {
+      "id": "e2203db7-09a3-48bf-8dff-37d4c3a9cbda",
+      "name": "prepared_dim_genre_validation"
+    }
+  ]
+}

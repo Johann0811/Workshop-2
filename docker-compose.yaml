@@ -1,0 +1,151 @@
+---
+x-airflow-common:
+  &airflow-common
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.8}
+  build: .
+  env_file:
+    - ${ENV_FILE_PATH:-.env}
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqldb://${AIRFLOW_DB_USER:-airflow_user}:${AIRFLOW_DB_PASSWORD:-airflow_pass}@mysql:3306/${AIRFLOW_DB_NAME:-airflow_db}
+    AIRFLOW__DATABASE__SQL_ENGINE_COLLATION_FOR_IDS: utf8mb3_bin
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-airflow_jwt_secret}
+    AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    MYSQL_HOST: mysql
+    MYSQL_PORT: 3306
+    GRAMMY_DB_NAME: ${GRAMMY_DB_NAME:-grammy_source}
+    GRAMMY_DB_USER: ${GRAMMY_DB_USER:-grammy_user}
+    GRAMMY_DB_PASSWORD: ${GRAMMY_DB_PASSWORD:-grammy_pass}
+    DW_DB_NAME: ${DW_DB_NAME:-dw}
+    DW_DB_USER: ${DW_DB_USER:-etl_user}
+    DW_DB_PASSWORD: ${DW_DB_PASSWORD:-etl_pass}
+    DATA_DIR: /opt/airflow/data
+    WORK_DIR: /opt/airflow/data/work
+    OUTPUT_DIR: /opt/airflow/data/output
+    PYTHONPATH: /opt/airflow
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
+    - ${AIRFLOW_PROJ_DIR:-.}/src:/opt/airflow/src
+    - ${AIRFLOW_PROJ_DIR:-.}/sql:/opt/airflow/sql
+    - ${AIRFLOW_PROJ_DIR:-.}/tests:/opt/airflow/tests
+    - ${AIRFLOW_PROJ_DIR:-.}/scripts:/opt/airflow/scripts
+    - ${AIRFLOW_PROJ_DIR:-.}/notebooks:/opt/airflow/notebooks
+    - ${AIRFLOW_PROJ_DIR:-.}/docs:/opt/airflow/docs
+    - ${AIRFLOW_PROJ_DIR:-.}/gx:/opt/airflow/gx
+    - ${AIRFLOW_PROJ_DIR:-.}/main.py:/opt/airflow/main.py
+    - ${AIRFLOW_PROJ_DIR:-.}/pytest.ini:/opt/airflow/pytest.ini
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    mysql:
+      condition: service_healthy
+
+services:
+  mysql:
+    image: mysql:8.0
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --explicit-defaults-for-timestamp=1
+      --local-infile=0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+    volumes:
+      - mysql-db-volume:/var/lib/mysql
+      - ${AIRFLOW_PROJ_DIR:-.}/docker/mysql-init:/docker-entrypoint-initdb.d
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_password}"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        airflow db migrate
+        if ! airflow users create \
+          --username "${_AIRFLOW_WWW_USER_USERNAME:-airflow}" \
+          --firstname Airflow \
+          --lastname Admin \
+          --role Admin \
+          --email admin@example.com \
+          --password "${_AIRFLOW_WWW_USER_PASSWORD:-airflow}" > /tmp/user_create_out.txt 2>&1; then
+          if grep -qi "already exists" /tmp/user_create_out.txt; then
+            echo "Admin user already exists, continuing."
+          else
+            echo "ERROR: airflow users create failed for a reason other than 'already exists'." >&2
+            cat /tmp/user_create_out.txt >&2
+            exit 1
+          fi
+        else
+          cat /tmp/user_create_out.txt
+        fi
+    restart: "no"
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  tools:
+    <<: *airflow-common
+    entrypoint: []
+    command: ["python", "--version"]
+    restart: "no"
+
+volumes:
+  mysql-db-volume:

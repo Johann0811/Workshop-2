@@ -1,0 +1,92 @@
+{
+  "expectations": [
+    {
+      "id": "f5c6b048-dd3b-42de-aeb9-c1c036a86792",
+      "kwargs": {
+        "column_set": [
+          "year",
+          "category",
+          "nominee",
+          "artist"
+        ],
+        "exact_match": false
+      },
+      "meta": {
+        "rule_id": "DQ01",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_table_columns_to_match_set"
+    },
+    {
+      "id": "ee95b905-a520-43c1-b239-abff4c9901ee",
+      "kwargs": {
+        "column": "year"
+      },
+      "meta": {
+        "rule_id": "DQ06",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "3fcdaca0-5c7b-4511-b9bf-0b3d7b325d7e",
+      "kwargs": {
+        "column": "year",
+        "max_value": 2019.0,
+        "min_value": 1958.0
+      },
+      "meta": {
+        "rule_id": "DQ06",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    },
+    {
+      "id": "92df50f1-ed19-43f7-a9cb-002fcc0b1c45",
+      "kwargs": {
+        "column": "category"
+      },
+      "meta": {
+        "rule_id": "DQ06",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "6f2a771c-7998-4d65-b78e-d7df05859261",
+      "kwargs": {
+        "value": 4810
+      },
+      "meta": {
+        "rule_id": "DQ07",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_table_row_count_to_equal"
+    },
+    {
+      "id": "e5f2a38f-1d88-4f98-a426-5d08b2f55954",
+      "kwargs": {
+        "column": "dq08_row_count",
+        "max_value": 2.0,
+        "min_value": 1.0
+      },
+      "meta": {
+        "rule_id": "DQ08",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    }
+  ],
+  "id": "4d9c1070-83dc-48e8-bd5b-0c0e880360f7",
+  "meta": {
+    "great_expectations_version": "1.23.1"
+  },
+  "name": "grammy_raw",
+  "notes": null
+}

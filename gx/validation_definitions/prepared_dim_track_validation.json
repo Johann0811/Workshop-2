@@ -1,0 +1,22 @@
+{
+  "data": {
+    "asset": {
+      "id": "97be10c8-cc7a-4a63-8cac-553da53edf17",
+      "name": "prepared_dim_track_asset"
+    },
+    "batch_definition": {
+      "id": "f8499388-5dd0-47cb-a6f4-ac7440198655",
+      "name": "prepared_dim_track_batch"
+    },
+    "datasource": {
+      "id": "b20b539a-97f4-4992-86ca-58b8af784dd8",
+      "name": "prepared_dim_track_source"
+    }
+  },
+  "id": "5081ca1e-a43d-484f-a08b-795616ee8abf",
+  "name": "prepared_dim_track_validation",
+  "suite": {
+    "id": "03f863e6-d3da-4c29-966a-e8fbd5bb9649",
+    "name": "prepared_dim_track"
+  }
+}

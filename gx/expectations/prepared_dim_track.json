@@ -1,0 +1,65 @@
+{
+  "expectations": [
+    {
+      "id": "d26bc1c9-4c8f-4cc7-8ac5-3a6c01db0c40",
+      "kwargs": {
+        "column_set": [
+          "track_id",
+          "track_name",
+          "album_name",
+          "artists_raw",
+          "n_artists"
+        ]
+      },
+      "meta": {
+        "rule_id": "DQ09",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_table_columns_to_match_set"
+    },
+    {
+      "id": "d2c2b276-a023-421d-9390-f41792224fb1",
+      "kwargs": {
+        "column": "track_id"
+      },
+      "meta": {
+        "rule_id": "DQ09",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_be_unique"
+    },
+    {
+      "id": "bab70415-4717-49bd-beb3-770dc1e32b9d",
+      "kwargs": {
+        "column": "track_id"
+      },
+      "meta": {
+        "rule_id": "DQ09",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "1ea2cd89-22e1-4b75-986c-cd1d75c64524",
+      "kwargs": {
+        "column": "n_artists",
+        "type_": "int8"
+      },
+      "meta": {
+        "rule_id": "DQ09",
+        "severity": "critical"
+      },
+      "severity": "critical",
+      "type": "expect_column_values_to_be_of_type"
+    }
+  ],
+  "id": "03f863e6-d3da-4c29-966a-e8fbd5bb9649",
+  "meta": {
+    "great_expectations_version": "1.23.1"
+  },
+  "name": "prepared_dim_track",
+  "notes": null
+}

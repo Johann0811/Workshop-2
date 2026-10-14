@@ -1,0 +1,49 @@
+======================================================================
+RERUN-CHECK REPORT
+Generated: 2026-10-14T20:29:59.763833+00:00
+Rerun batch_id: batch_20261014_202922_e8f5a6
+======================================================================
+
+Table: FACT_TRACK_GENRE
+  Rows  BEFORE : 113549
+  Rows  AFTER  : 113549  OK
+  Hash  BEFORE : 1998867226bff35d01bff28ec7cabe04d233303a26680837519bccadec4c6dad
+  Hash  AFTER  : 1998867226bff35d01bff28ec7cabe04d233303a26680837519bccadec4c6dad  OK
+  Biz-key dups  : 0  OK
+  Table result  : PASS
+
+Table: DIM_TRACK
+  Rows  BEFORE : 89740
+  Rows  AFTER  : 89740  OK
+  Hash  BEFORE : c502d75f53ca9e43b13f787e0c80828543fb88553b73608d26528f78d63dbe5f
+  Hash  AFTER  : c502d75f53ca9e43b13f787e0c80828543fb88553b73608d26528f78d63dbe5f  OK
+  Biz-key dups  : 0  OK
+  Table result  : PASS
+
+Table: DIM_ARTIST
+  Rows  BEFORE : 17622
+  Rows  AFTER  : 17622  OK
+  Hash  BEFORE : 9276c1b8779b8dccb78d29cc6160339f21356c501504ae344a500cdf5ff708b2
+  Hash  AFTER  : 9276c1b8779b8dccb78d29cc6160339f21356c501504ae344a500cdf5ff708b2  OK
+  Biz-key dups  : 0  OK
+  Table result  : PASS
+
+Table: DIM_GENRE
+  Rows  BEFORE : 114
+  Rows  AFTER  : 114  OK
+  Hash  BEFORE : 002920d948c1e8e90c28a4bf6a3e20e73647a0d4b6df46122416c1b909923a68
+  Hash  AFTER  : 002920d948c1e8e90c28a4bf6a3e20e73647a0d4b6df46122416c1b909923a68  OK
+  Biz-key dups  : 0  OK
+  Table result  : PASS
+
+Table: quarantine_spotify
+  Rows  BEFORE : 1
+  Rows  AFTER  : 1  OK
+  Hash  BEFORE : 9614b96891e05313e90f23984c55dace6f0643d436f9526eb8d9c352be777e26
+  Hash  AFTER  : 9614b96891e05313e90f23984c55dace6f0643d436f9526eb8d9c352be777e26  OK
+  Biz-key dups  : 0  OK
+  Table result  : PASS
+
+======================================================================
+OVERALL RESULT: PASS — idempotent rerun verified, zero duplication
+======================================================================

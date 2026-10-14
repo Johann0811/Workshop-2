@@ -1,0 +1,39 @@
+{
+  "status": "SUCCESS",
+  "verified_at": "2026-10-14T20:28:00.805940+00:00",
+  "tolerance": 0.05,
+  "comparisons": {
+    "K1": {
+      "rows_verified": 114,
+      "discrepancies_count": 0,
+      "status": "PASS"
+    },
+    "K2": {
+      "rows_verified": 2,
+      "discrepancies_count": 0,
+      "status": "PASS"
+    },
+    "K3": {
+      "rows_verified": 2,
+      "discrepancies_count": 0,
+      "status": "PASS"
+    },
+    "K4": {
+      "rows_verified": 4,
+      "discrepancies_count": 0,
+      "status": "PASS"
+    },
+    "K5": {
+      "rows_verified": 2,
+      "discrepancies_count": 0,
+      "status": "PASS"
+    },
+    "K6": {
+      "rows_verified": 114,
+      "discrepancies_count": 0,
+      "status": "PASS"
+    }
+  },
+  "discrepancies_count": 0,
+  "discrepancies": []
+}

@@ -1,0 +1,12 @@
+{
+  "actions": [],
+  "id": "f891890b-2bcc-4c4b-8ef8-aa965a797ccf",
+  "name": "prepared_dim_artist_checkpoint",
+  "result_format": "SUMMARY",
+  "validation_definitions": [
+    {
+      "id": "1cd6e409-f27c-4571-9238-27927130a843",
+      "name": "prepared_dim_artist_validation"
+    }
+  ]
+}
