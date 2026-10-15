@@ -62,20 +62,20 @@ The objective is to integrate the two sources into a trusted dimensional Data Wa
 
 | ID | Analytical requirement | Required data | KPI(s) | Result / level of detail |
 |---|---|---|---|---|
-| **R1** | Which genres have a higher share of Spotify catalogue listings associated with artists who have a Grammy record? | Spotify `track_genre`, primary artist; Grammy-derived artist record/status | **K1** — share associated with Grammy-record artists by genre | Genre × listing; interpreted as a rate over track–genre fact rows, not unique artists. |
-| **R2** | How does popularity differ between artists with historical Grammy records (1958–2018) and artists with no record, and how does it vary by award band? | Spotify `popularity`; artist-level `grammy_wins_1958_2018`, `grammy_status`, `wins_band` | **K2** — mean/median by group; **K3** — Top-10% share and ratio; **K4** — popularity and Top-10% share by award band | `with_award` vs `no_record`, then bands `1`, `2-4`, `5-9`, `10+`; `only_2019` is excluded from award-outcome comparisons. |
-| **R3** | What share of listings has zero traction among Grammy-record artists versus the rest, and how does it vary by genre? | `popularity`, `is_zero_traction`, artist Grammy record flag, genre | **K5** — zero-traction share by segment; **K6** — zero-traction share by genre among Grammy-associated listings | Segment and genre; `popularity = 0` is a project-defined proxy for zero traction, not a direct stream/revenue measure. |
+| **R1** | Which genres have a higher share of Spotify catalogue listings associated with artists who have a Grammy record? | Spotify `track_genre`, primary artist; Grammy-derived artist record/status | **K1:** share associated with Grammy-record artists by genre | Genre × listing; interpreted as a rate over track–genre fact rows, not unique artists. |
+| **R2** | How does popularity differ between artists with historical Grammy records (1958–2018) and artists with no record, and how does it vary by award band? | Spotify `popularity`; artist-level `grammy_wins_1958_2018`, `grammy_status`, `wins_band` | **K2:** mean/median by group; **K3:** Top-10% share and ratio; **K4:** popularity and Top-10% share by award band | `with_award` vs `no_record`, then bands `1`, `2-4`, `5-9`, `10+`; `only_2019` is excluded from award-outcome comparisons. |
+| **R3** | What share of listings has zero traction among Grammy-record artists versus the rest, and how does it vary by genre? | `popularity`, `is_zero_traction`, artist Grammy record flag, genre | **K5:** zero-traction share by segment; **K6:** zero-traction share by genre among Grammy-associated listings | Segment and genre; `popularity = 0` is a project-defined proxy for zero traction, not a direct stream/revenue measure. |
 
 ### KPI definitions used by the SQL views
 
 | KPI | Definition | Interpretation / caution |
 |---|---|---|
-| **K1 — Grammy-record share by genre** | `AVG(has_grammy_record) * 100`, grouped by `track_genre` in `VW_KPI_BASE` | Share of fact listings in each genre linked to Grammy-record artists. It is not the share of distinct artists. |
-| **K2 — Popularity comparison** | Mean and median `popularity` for `with_award` and `no_record` | Descriptive group comparison only; no causal inference. |
-| **K3 — Top-10% share and ratio** | Percentage of each group with `is_top10_global = 1`; ratio = `with_award` percentage / `no_record` percentage | p90 is calculated for the current batch. It was 63 in the profiled snapshot. |
-| **K4 — Award bands** | Mean, median, and Top-10% share by `wins_band` | Review `sample_status`; small bands require caution. |
-| **K5 — Zero traction by segment** | `AVG(is_zero_traction) * 100` for `artists_with_grammy` and `rest_of_catalog` | `is_zero_traction = (popularity == 0)`. |
-| **K6 — Zero traction by genre** | Zero-traction listings among Grammy-associated rows divided by all Grammy-associated listings in the genre | `no data` means denominator zero, not a rate of 0%. `small sample` means 1–29 Grammy-associated listings; `ok` means at least 30. |
+| **K1 Grammy-record share by genre** | `AVG(has_grammy_record) * 100`, grouped by `track_genre` in `VW_KPI_BASE` | Share of fact listings in each genre linked to Grammy-record artists. It is not the share of distinct artists. |
+| **K2 Popularity comparison** | Mean and median `popularity` for `with_award` and `no_record` | Descriptive group comparison only; no causal inference. |
+| **K3 Top-10% share and ratio** | Percentage of each group with `is_top10_global = 1`; ratio = `with_award` percentage / `no_record` percentage | p90 is calculated for the current batch. It was 63 in the profiled snapshot. |
+| **K4 Award bands** | Mean, median, and Top-10% share by `wins_band` | Review `sample_status`; small bands require caution. |
+| **K5 Zero traction by segment** | `AVG(is_zero_traction) * 100` for `artists_with_grammy` and `rest_of_catalog` | `is_zero_traction = (popularity == 0)`. |
+| **K6 Zero traction by genre** | Zero-traction listings among Grammy-associated rows divided by all Grammy-associated listings in the genre | `no data` means denominator zero, not a rate of 0%. `small sample` means 1–29 Grammy-associated listings; `ok` means at least 30. |
 
 SQL definitions are in `sql/kpi_queries.sql`. Creating the views (`create-kpi-views`) and comparing them with pandas (`kpi-crosscheck`) are separate commands; neither runs automatically when a DAG is triggered.
 
@@ -91,8 +91,6 @@ Source preparation is not the final ETL load. `prepare-source` fills and reconci
 The source-preparation logic converts timestamp text to UTC-compatible MySQL DATETIME values, converts `winner` to a MySQL-compatible boolean value, converts empty fields to SQL `NULL`, inserts in chunks, and reconciles the imported row count in source-control metadata.
 
 ## 4. Pipeline architecture and responsibilities
-
-> **Pipeline architecture source:** [`docs/pipeline_architecture.mmd`](docs/pipeline_architecture.mmd). The dimensional schema is a separate artifact; the existing [`docsWorkshop/star_schema.png`](docsWorkshop/star_schema.png) and [`docsWorkshop/star_schema.mmd`](docsWorkshop/star_schema.mmd) are preserved.
 
 ```mermaid
 flowchart TD
@@ -161,11 +159,9 @@ The documented shared artist normalizer is `normalize_artist_name()` in `src/tra
 | Grammy timestamps | All timestamp text is parseable; offsets include `-08:00` and `-07:00`; `published_at` year agrees with award `year` in only 1.8% | These are website publication/update dates, not award event dates. |
 | Genre vs category | Spotify has 114 genre labels and Grammy has 638 raw categories (629 normalized); no supplied shared vocabulary/key | Do not invent a genre-to-category bridge. |
 
-Existing profile figures in `docs/evidence/` include `spotify_popularity_distribution.png`, `spotify_exact_copies_by_genre.png`, `spotify_artists_per_row.png`, `grammy_rows_by_year.png`, `grammy_source_grain.png`, and `grammy_artist_match_steps.png`. The CSV `docs/evidence/profiling_evidence_section_6_3.csv` contains the evidence table used for §6.3.
-
 ### Detailed profiling evidence for Workshop-2 §6.3
 
-The table below consolidates the detailed row-level findings that support the risk catalogue. The companion CSV `docs/evidence/profiling_evidence_section_6_3.csv` is retained as machine-readable evidence. The raw profiling itself is descriptive: it reports observations and does not apply ETL cleaning or GX pass/fail policy.
+The table below consolidates the detailed row-level findings that support the risk catalogue.
 
 | Dataset / attribute                           | Profiling evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Potential quality risk                                                                                                                                                                        | Related requirement          |
 |:----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------|
@@ -200,7 +196,7 @@ The table below consolidates the detailed row-level findings that support the ri
 | Both / time                                   | Temporal: Spotify has no date/year field; Grammy `year` spans 1958–2019; `popularity` is an undated snapshot.                                                                                                                                                                                                                                                                                                                                                             | Temporal consistency: popularity cannot be aligned before/after an award event with these sources.                                                                                            | R2                           |
 | Both / genre versus category                  | Cross-source: Spotify has 114 genres; Grammy has 638 raw categories (629 after normalization); no shared ID or directly equivalent vocabulary.                                                                                                                                                                                                                                                                                                                            | Consistency: there is no supported genre-to-award-category bridge; do not introduce external/manual mappings.                                                                                 | R1                           |
 
-**Matching-statistic note:** profiling artefacts report more than one matching statistic because they use different matching steps, keys, or denominators. For example, the row-level exploratory method reports 1,199/2,969 resolvable Grammy rows (40.4%), while one Section 6.3 table reports 483/17,622 Spotify primary artists. These are different units and must not be treated as interchangeable. For DQ15, use the actual per-batch `grammy_match_rate_pct` emitted by the ETL. If reporting a particular exploratory number, name its numerator, denominator, method, and profiling version.
+
 
 ### Quality-risk catalogue RK01–RK15
 
@@ -287,12 +283,12 @@ Transformation applies documented engineering rules after the raw validation gat
 
 | Decision | Rule / fields | Observed before → after | Rationale and exception handling | Analytical impact |
 |---|---|---|---|---|
-| **TD01 — Exact-copy removal** | Compare all 20 Spotify data columns, excluding the exported `Unnamed: 0` index / `source_row_id`; retain first copy. | 114,000 → 113,550 rows; 450 extra copies removed. | Duplicates are recorded in metadata; raw source stays unchanged. | Prevents fact row and aggregate inflation. |
-| **TD02 — Missing primary artist** | Quarantine null/empty `artists`, reason `missing_artist`. | 113,550 after deduplication → 113,549 fact candidates; one row quarantined. | That row also lacks `track_name` and `album_name`; `artists` is the criterion because it cannot be linked to the artist dimension. Quarantine Parquet is written under the batch work directory and loaded to `quarantine_spotify`. | Keeps FK chain valid while retaining an audit record. |
-| **TD03 — Primary Spotify artist** | Split `artists` on `;`, trim, and use the first token as `primary_artist_name`; preserve full string and count. | Original multi-credit string → `primary_artist_name`, `artists_raw`, `n_artists`. | Null/empty names are removed by TD02. Secondary collaborators are not expanded to separate fact rows. | Consistent artist integration without row explosion. |
-| **TD04 — Grammy year counts** | Count rows with `year <= 2018` as historical award records; count 2019 rows separately in `grammy_records_2019`; do not use `winner`. | Raw Grammy rows → per-normalized-artist wins and 2019 record count. | `winner` is constant `True`. The historical-winner interpretation for 1958–2018 and the 2019 nominee-list interpretation are assumptions based on source structure, not externally verified outcomes. Unresolvable artist keys are reported separately. | `grammy_status`, `has_grammy_record`, `wins_band`, and K2–K4 groups. |
-| **TD05 — Grammy artist key resolution** | If category is Best New Artist (case-insensitive) and artist is empty, use `nominee`; if artist contains ` Featuring `, use text before it; exclude `(Various Artists)`. | Mixed text/null fields → resolved artist or no key. | Do not split on `&` or `With`: these can occur in legitimate group names. Unresolvable rows remain outside the artist aggregate and are included/excluded from match-rate denominator according to resolvability rules. | Reduces avoidable false matches while keeping limitations visible. |
-| **TD06 — Analytical flags** | `is_zero_traction = (popularity == 0)`; `is_top10_global = (popularity >= p90)`. | Raw popularity → two flags and stored batch p90 threshold. | p90 is recomputed each batch and recorded in `etl_control_batch`; baseline p90 is 63. | K3, K5, and K6; DQ13 validates consistency. |
+| **TD01 Exact-copy removal** | Compare all 20 Spotify data columns, excluding the exported `Unnamed: 0` index / `source_row_id`; retain first copy. | 114,000 → 113,550 rows; 450 extra copies removed. | Duplicates are recorded in metadata; raw source stays unchanged. | Prevents fact row and aggregate inflation. |
+| **TD02 Missing primary artist** | Quarantine null/empty `artists`, reason `missing_artist`. | 113,550 after deduplication → 113,549 fact candidates; one row quarantined. | That row also lacks `track_name` and `album_name`; `artists` is the criterion because it cannot be linked to the artist dimension. Quarantine Parquet is written under the batch work directory and loaded to `quarantine_spotify`. | Keeps FK chain valid while retaining an audit record. |
+| **TD03 Primary Spotify artist** | Split `artists` on `;`, trim, and use the first token as `primary_artist_name`; preserve full string and count. | Original multi-credit string → `primary_artist_name`, `artists_raw`, `n_artists`. | Null/empty names are removed by TD02. Secondary collaborators are not expanded to separate fact rows. | Consistent artist integration without row explosion. |
+| **TD04 Grammy year counts** | Count rows with `year <= 2018` as historical award records; count 2019 rows separately in `grammy_records_2019`; do not use `winner`. | Raw Grammy rows → per-normalized-artist wins and 2019 record count. | `winner` is constant `True`. The historical-winner interpretation for 1958–2018 and the 2019 nominee-list interpretation are assumptions based on source structure, not externally verified outcomes. Unresolvable artist keys are reported separately. | `grammy_status`, `has_grammy_record`, `wins_band`, and K2–K4 groups. |
+| **TD05 Grammy artist key resolution** | If category is Best New Artist (case-insensitive) and artist is empty, use `nominee`; if artist contains ` Featuring `, use text before it; exclude `(Various Artists)`. | Mixed text/null fields → resolved artist or no key. | Do not split on `&` or `With`: these can occur in legitimate group names. Unresolvable rows remain outside the artist aggregate and are included/excluded from match-rate denominator according to resolvability rules. | Reduces avoidable false matches while keeping limitations visible. |
+| **TD06 Analytical flags** | `is_zero_traction = (popularity == 0)`; `is_top10_global = (popularity >= p90)`. | Raw popularity → two flags and stored batch p90 threshold. | p90 is recomputed each batch and recorded in `etl_control_batch`; baseline p90 is 63. | K3, K5, and K6; DQ13 validates consistency. |
 
 ### Artist integration contract
 
@@ -306,9 +302,7 @@ Transformation applies documented engineering rules after the raw validation gat
 
 ## 8. Dimensional model and data dictionary
 
-The implemented model is a **single-fact star schema** with the grain of a Spotify catalogue listing. Grammy-derived attributes live in `DIM_ARTIST`; there is no separate Grammy fact table in this implementation.
-
-**Fact grain:** one `FACT_TRACK_GENRE` row represents one Spotify `track_id` listed under one `track_genre` in the source snapshot, after exact-copy removal and quarantine of the missing-primary-artist row. The primary artist is referenced through `artist_key`.
+**Fact grain:** one `FACT_TRACK_GENRE` row represents one Spotify `track_id` listed under one `track_genre` in the source snapshot.
 
 ![Star schema](docs/star_schema.png)
 
@@ -365,8 +359,8 @@ Only primary artists found in Spotify are members of `DIM_ARTIST`; Grammy-only n
 
 ### Control and quarantine tables
 
-- **`etl_control_batch`** — one row per batch ID; records start/completion time, raw Spotify count, copies removed, quarantined rows, candidate/loaded fact counts, dimension counts, Grammy imported/extracted/resolvable/matched counts, match-rate percentage, p90 threshold, and batch status.
-- **`quarantine_spotify`** — records excluded rows with `quarantine_id`, `etl_batch_id`, `source_row_id`, `track_id`, `reason`, `raw_data`, and `quarantined_at`. A unique key on `(source_row_id, reason)` makes the same quarantine decision repeatable.
+- **`etl_control_batch`:** one row per batch ID; records start/completion time, raw Spotify count, copies removed, quarantined rows, candidate/loaded fact counts, dimension counts, Grammy imported/extracted/resolvable/matched counts, match-rate percentage, p90 threshold, and batch status.
+- **`quarantine_spotify`:** records excluded rows with `quarantine_id`, `etl_batch_id`, `source_row_id`, `track_id`, `reason`, `raw_data`, and `quarantined_at`. A unique key on `(source_row_id, reason)` makes the same quarantine decision repeatable.
 
 ### Observed baseline counts
 
@@ -382,7 +376,7 @@ Only primary artists found in Spotify are members of `DIM_ARTIST`; Grammy-only n
 | `quarantine_spotify` | 1 |
 | `grammy_source.grammy_awards` | 4,810 |
 
-These are observed baseline counts in the included evidence, not guaranteed counts for future source batches. DQ11 checks row conservation using the current batch metadata.
+These are observed baseline counts in the included evidence. DQ11 checks row conservation using the current batch metadata.
 
 ### Measures and constraints
 
