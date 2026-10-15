@@ -293,7 +293,7 @@ Great Expectations Core 1.23.1 uses a persistent file-based context under `gx/`.
 
 ![Star schema](docs/star_schema.png)
 
-Editable dimensional diagram: [`docs/star_schema.mmd`](doc/star_schema.mmd). DDL: `sql/dw_schema.sql`.
+Editable dimensional diagram: [`docs/star_schema.mmd`](docs/star_schema.mmd). DDL: `sql/dw_schema.sql`.
 
 ### DIM_TRACK
 
