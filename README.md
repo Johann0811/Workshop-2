@@ -28,8 +28,7 @@ This repository implements a batch ETL pipeline that integrates Spotify track li
 14. [KPI views, dashboard, and traceability](#14-kpi-views-dashboard-and-traceability)
 15. [Setup and execution guide](#15-setup-and-execution-guide)
 16. [Assumptions and limitations](#16-assumptions-and-limitations)
-17. [Reliability evidence register and screenshot checklist](#17-reliability-evidence-register-and-screenshot-checklist)
-18. [Repository structure](#18-repository-structure)
+17. [Repository structure](#17-repository-structure)
 
 ---
 
