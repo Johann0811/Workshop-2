@@ -310,9 +310,9 @@ The implemented model is a **single-fact star schema** with the grain of a Spoti
 
 **Fact grain:** one `FACT_TRACK_GENRE` row represents one Spotify `track_id` listed under one `track_genre` in the source snapshot, after exact-copy removal and quarantine of the missing-primary-artist row. The primary artist is referenced through `artist_key`.
 
-![Star schema](docsWorkshop/star_schema.png)
+![Star schema](docs/star_schema.png)
 
-Editable dimensional diagram: [`docsWorkshop/star_schema.mmd`](docsWorkshop/star_schema.mmd). DDL: `sql/dw_schema.sql`.
+Editable dimensional diagram: [`docs/star_schema.mmd`](doc/star_schema.mmd). DDL: `sql/dw_schema.sql`.
 
 ### DIM_TRACK
 

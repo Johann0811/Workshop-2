@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "304a16b9-267f-4035-9a31-a8a272ed2dd3",
+      "id": "043e3dfb-ea64-42ef-b242-97cf558c43d3",
       "kwargs": {
         "column_set": [
           "track_genre"
@@ -15,7 +15,7 @@
       "type": "expect_table_columns_to_match_set"
     },
     {
-      "id": "81d638c4-8e2b-4ba4-9959-fa9f9ce726ef",
+      "id": "122b113e-0059-4f28-b269-e68841363844",
       "kwargs": {
         "column": "track_genre"
       },
@@ -27,7 +27,7 @@
       "type": "expect_column_values_to_be_unique"
     },
     {
-      "id": "6ea847c8-d299-4f90-aa66-df01c8af4672",
+      "id": "85023e4e-2c1f-45d7-ac48-3194d6b9cf16",
       "kwargs": {
         "column": "track_genre"
       },
