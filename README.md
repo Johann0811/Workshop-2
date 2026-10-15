@@ -302,7 +302,7 @@ Transformation applies documented engineering rules after the raw validation gat
 
 ## 8. Dimensional model and data dictionary
 
-**Fact grain:** one `FACT_TRACK_GENRE` row represents one Spotify `track_id` listed under one `track_genre` in the source snapshot.
+**Fact grain:** One row in `fact_track_genre` represents one Spotify track listed under one genre in the catalog snapshot, together with the popularity score recorded for that listing and the Grammy recognition attributes of the track’s primary artist.
 
 ![Star schema](docs/star_schema.png)
 
@@ -438,25 +438,25 @@ Critical failures block unsafe downstream processing. Warnings are recorded and 
 
 The code's retry settings prove the configured policy. To claim a retry was actually observed, retain a real task attempt/log showing it.
 
-## 11. Test A — successful run
+## 11. Test A. successful run
 
 **Objective:** demonstrate that the complete Airflow DAG executes on the original inputs, all critical gates pass, and prepared data is loaded.
 
 1. Prepare the source table and DW as described in §15.
 2. Start the full Compose stack and open `http://localhost:8080`.
-3. Locate `reliable_music_pipeline`, enable/unpause it if necessary, and click **Trigger DAG**.
+3. Locate `reliable_music_pipeline` and click Trigger DAG.
 4. In Grid or Graph, wait until all seven tasks are `success`.
 5. Open the `load_dw` logs and run `python main.py status` through the `tools` container to verify the DW counts.
 
-**Expected baseline for the archived source:** `grammy_source.grammy_awards=4810`, `FACT_TRACK_GENRE=113549`, `DIM_TRACK=89740`, `DIM_ARTIST=17622`, `DIM_GENRE=114`, and `quarantine_spotify=1`. Use the actual status output from your run as the evidence for the final submission.
+**Expected baseline for the archived source:** `grammy_source.grammy_awards=4810`, `FACT_TRACK_GENRE=113549`, `DIM_TRACK=89740`, `DIM_ARTIST=17622`, `DIM_GENRE=114`, and `quarantine_spotify=1`.
 
-> **[SCREENSHOT REQUIRED — TEST A GRID/GRAPH]** Paste a screenshot from the actual Airflow Grid/Graph showing all seven tasks in `success`. Save it as `docs/evidence/testA_grid.png`.
+![Test-A](docs/testA_grid.png)
+![Test-Asuccess](docs/testA_success.png)
 
-> **[SCREENSHOT REQUIRED — TEST A LOAD LOG]** Paste a screenshot of the `load_dw` task log showing batch ID, fact rows, and dimension counts. Save it as `docs/evidence/testA_load_log.png` (or retain an equivalent text log and link to it).
 
-Validation JSONs for a successful batch are written under `data/validation_results/<batch_id>/`. Keep the raw and prepared result files for the run used as Test A; do not assume a JSON from a different or older batch is evidence for the latest run.
+Validation JSONs for a successful batch are written under `data/validation_results/<batch_id>/`.
 
-## 12. Test B — controlled critical failure
+## 12. Test B. controlled critical failure
 
 **Objective:** show that an invalid raw input fails a Critical gate, downstream tasks do not proceed normally, and the DW is not touched by that failed run.
 
@@ -483,13 +483,9 @@ In Airflow, choose **Trigger DAG with config** for `reliable_music_pipeline` and
 - `extract_grammys` and `validate_grammys_raw`: may complete successfully on the independent branch.
 - `transform_and_integrate`, `validate_prepared`, and `load_dw`: `upstream_failed` / blocked because both raw branches are required for convergence and the Spotify gate failed.
 
-Verify the DW counts before and after the failed run. Save the failed GX JSON under the test batch's `data/validation_results/<batch_id>/` folder.
+![Test-B](docs/testB_grid.png)
 
-> **[SCREENSHOT REQUIRED — TEST B GRID/GRAPH]** Paste the actual Grid/Graph showing the failed `validate_spotify_raw` task and the downstream blocked states. Save it as `docs/evidence/testB_grid.png`.
-
-> **[SCREENSHOT REQUIRED — TEST B LOG]** Paste the task log identifying DQ03 and the `-5` value; save as `docs/evidence/testB_validate_spotify_log.png`, or retain the existing text log in `docs/evidence/testB_validate_spotify_log.txt`.
-
-> **[EVIDENCE REQUIRED — TEST B DW UNCHANGED]** Save status/count output before and after the failed DAG Run in `docs/evidence/testB_dw_status.txt`. Explain that the load task did not run because the raw gate failed.
+![Test-Bfail](docs/testB_fail.png)
 
 ## 13. Repeatability and safe reruns
 
@@ -513,14 +509,11 @@ Limit: count/hash equality plus uniqueness is strong evidence for the monitored 
 
 ### KPI view definitions and recommended visuals
 
-| Visual / KPI | DW view | Visual and fields | Filter / sample policy | Interpretation |
-|---|---|---|---|---|
-| **K1 — Grammy-record share by genre (R1)** | `VW_KPI_1_GENRE_CONCENTRATION` | Sorted horizontal bar. Y = `track_genre`; X = `k1_pct_with_grammy_record`; `total_tracks` in tooltip. | Genre slicer may filter K1. All 114 raw genres have 1,000 rows in the provided sample. | Larger percentage means a greater share of track–genre listings in that genre are associated with a Grammy-record artist; association, not causation. |
-| **K2 — Popularity: `with_award` vs `no_record` (R2)** | `VW_KPI_2_POPULARITY_COMPARISON` | Grouped columns; X = `r2_group`; values = `mean_popularity` and `median_popularity`; `total_tracks` tooltip. | No genre slicer in the current aggregate view. | Mean and median together show differences and potential skew; no causal effect is established. |
-| **K3 — Top-10% share and ratio (R2)** | `VW_KPI_3_TOP10_RATIO` | Two percentage values for `with_award` and `no_record`, plus ratio card/indicator `ratio_vs_no_record`. | No slicer in current aggregate view. A ratio > 1 means the `with_award` group has a higher observed Top-10% share. | Compares over-representation in the global popularity top decile, not causal impact. |
-| **K4 — Popularity by Grammy win band (R2)** | `VW_KPI_4_AWARD_BANDS` | Line/step chart of `mean_popularity` and `median_popularity`; X order `1`, `2-4`, `5-9`, `10+`; tooltips `pct_top10`, `distinct_artists`, `total_tracks`, `sample_status`. | Mark or annotate `small sample` / `no data`; do not claim optional genre filtering works unless the view contains that field. | Describes popularity by award band; small samples require caution. |
-| **K5 — Zero-traction share, Grammy vs rest (R3)** | `VW_KPI_5_ZERO_TRACTION` | Two KPI cards for `k5_pct_zero_traction`, one per `catalog_segment`; show `total_tracks` as context. | No genre slicer in the aggregate view. | Compare proportions; zero traction is defined by popularity = 0. |
-| **K6 — Zero traction by genre among Grammy-associated listings (R3)** | `VW_KPI_6_ZERO_TRACTION_BY_GENRE` | Sorted horizontal bars; Y = `track_genre`; X = `k6_pct_zero_traction`; tooltips `grammy_artist_tracks`, `zero_traction_grammy_tracks`, `sample_status`. | Genre slicer and `sample_status` filter may apply to K6. Show or annotate `small sample` and `no data`. | `no data` means zero eligible Grammy-associated listings in that genre, not 0% zero-traction. |
+| Analytical Requirement | DW Element / Query | KPI / Visualization |
+|---|---|---|
+| **R1. Genre concentration:** Which Spotify genres have a higher share of catalogue listings associated with artists who have a Grammy record? | `dw.VW_KPI_BASE` and `dw.VW_KPI_1_GENRE_CONCENTRATION`; group by `track_genre` and use the artist-level `has_grammy_record` flag. | **K1:** Grammy-record share by genre: `AVG(has_grammy_record) × 100` for track–genre listings in each genre. Visual: sorted horizontal bar chart with genre on the axis and percentage on the value axis; tooltip shows total listings and Grammy-associated listings. A listing is counted in each genre under which its track appears. |
+| **R2. Popularity and historical Grammy recognition:** How does popularity differ between listings associated with artists with historical Grammy records (1958–2018) and those with no record, and how does it vary by award band? | `dw.VW_KPI_2_POPULARITY_COMPARISON`, `dw.VW_KPI_3_TOP10_RATIO`, and `dw.VW_KPI_4_AWARD_BANDS`; uses listing-level `popularity`, artist award status/count, the batch-specific global Top-10% flag, and `wins_band`. | **K2:** mean and median popularity for `with_award` vs. `no_record` (grouped columns). **K3:** Top-10% popularity share for both groups and their ratio (percentage comparison plus ratio card). **K4:** mean and median popularity by award bands `1`, `2–4`, `5–9`, `10+` (line/point chart), with Top-10% share, distinct artists, listing count, and sample-size status in tooltips. Mark small samples; this is descriptive, not causal. |
+| **R3. Zero popularity / zero-traction proxy:** What share of listings has zero popularity among Grammy-record artists compared with the rest, and how does it vary by genre? | `dw.VW_KPI_5_ZERO_TRACTION` and `dw.VW_KPI_6_ZERO_TRACTION_BY_GENRE`; uses `is_zero_traction`, artist Grammy-record status, and `track_genre`. | **K5:** percentage of listings with `popularity = 0` for `artists_with_grammy` vs. `rest_of_catalog` (paired KPI cards or bar chart). **K6:** percentage of zero-popularity listings among Grammy-associated listings by genre (sorted horizontal bar chart), with eligible listing count, zero-popularity count, and sample-size status in the tooltip. Zero popularity is a project-defined proxy; it is not a direct measure of streams or revenue. |
 
 ### End-to-end traceability matrix
 
@@ -536,30 +529,19 @@ Limit: count/hash equality plus uniqueness is strong evidence for the monitored 
 | R1–R3: row conservation | Raw rows, copies removed, quarantine count | RK01/RK02 | DQ11 / GX15 | TD01 + TD02 and reconciliation assertion | Fact count equals candidate count 113,549 in baseline | Ensures KPIs use reconciled data. |
 | R1: primary artist is valid | `artist_key_norm` and dimension keys | RK04/RK15 | DQ12 / GX16 and GX19 | TD03 normalizes primary artist and builds unique artist dimension | FK `FACT_TRACK_GENRE.artist_key` → `DIM_ARTIST.artist_key` | K1 and all artist-aware outputs. |
 
-### Power BI connection
+### Dashboard
 
-In Power BI Desktop, use **Get Data → MySQL database**:
+![Dashboard](docs/Dashboard.png)
 
-| Setting | Value |
-|---|---|
-| Server | `localhost:3307` |
-| Database | `dw` |
-| Authentication | Database authentication |
-| User | Value of `BI_DB_USER` from local `.env` |
-| Password | Value of `BI_DB_PASSWORD` from local `.env`; do not publish the value |
-| Data objects | `VW_KPI_BASE` and `VW_KPI_1_GENRE_CONCENTRATION` through `VW_KPI_6_ZERO_TRACTION_BY_GENRE` |
+![Graph1](docs/graph1.png)
 
-The assessed report must query the DW, not the raw CSV files. Refresh Power BI after a successful load. Slicers only affect visuals supported by the selected fields/model relationships; do not imply a slicer recalculates a view that has already been aggregated without the filtered field.
+![Graph2](docs/graph2.png)
 
-> **[SCREENSHOT REQUIRED — DASHBOARD OVERVIEW]** Paste a legible screenshot of the complete Power BI page with title, KPI cards, charts, and slicers. Save as `docs/evidence/dashboard_overview.png`.
+![Graph3](docs/graph3.png)
 
-> **[SCREENSHOT REQUIRED — K1]** Paste a crop of the genre-share chart. Save as `docs/evidence/dashboard_k1.png`.
+![Graph4](docs/graph4.png)
 
-> **[SCREENSHOT REQUIRED — K2/K3]** Paste a crop showing the popularity comparison and Top-10% share/ratio. Save as `docs/evidence/dashboard_k2_k3.png`.
-
-> **[SCREENSHOT REQUIRED — K4]** Paste a crop showing popularity by award band and its ordered categories. Save as `docs/evidence/dashboard_k4.png`.
-
-> **[SCREENSHOT REQUIRED — K5/K6]** Paste a crop showing the two zero-traction cards and the genre chart. Save as `docs/evidence/dashboard_k5_k6.png`.
+![Graph5](docs/graph5.png)
 
 ## 15. Setup and execution guide
 
@@ -740,46 +722,8 @@ docker compose down -v
 - The MySQL service is configured with local infile disabled; data loading uses Python/SQLAlchemy/PyMySQL chunked inserts, not `LOAD DATA`.
 - `.env` contains local development configuration and must not be committed or included in the distributable archive. `.env.example` is the template; these credentials are not production credentials.
 
-## 17. Reliability evidence register and screenshot checklist
 
-The evidence below describes what each artifact is meant to prove. Files may record historical runs; timestamps/batch IDs must be checked before presenting them as evidence for the final version.
-
-| Evidence ID | Run / task | Artifact or path | Claim supported | Status / note |
-|---|---|---|---|---|
-| E01 | Stack startup | `docs/evidence/compose_from_scratch.txt` | Compose startup and initialization from a clean environment | Present in archive; verify it represents the final config before claiming a fresh successful rebuild. |
-| E02 | Airflow initialization | `docs/evidence/airflow_version_evidence.txt` | Airflow version 3.1.8 and MySQL metadata connection | Present in archive; refresh if configuration changes. |
-| E03 | Grammy source preparation | `docs/evidence/grammy_reconciliation_evidence.txt` | 4,810 Grammy rows loaded and reconciled | Present in archive; refresh after re-preparing source. |
-| E04 | Spotify extraction input | `data/raw/spotify_dataset.csv` | Source CSV exists at its documented path and is mounted into the Airflow container | File should remain in repository. |
-| E05 | Secrets hygiene | `.gitignore`, `.env.example`, repository status | `.env` is ignored and example variables are documented without real secrets | Verify `.env` itself is not tracked or included in the final ZIP; `.gitignore` alone is not proof of Git history hygiene. |
-| E06 | Test A DAG | `docs/evidence/testA_grid.png` | All seven tasks succeed | **Capture from Airflow UI.** |
-| E07 | Test A Spotify raw gate | `data/validation_results/<successful_batch_id>/spotify_raw_validation.json` | DQ04 warning is explained and critical Spotify raw checks pass | Choose the JSON from the actual successful Test A batch. |
-| E08 | Test A Grammy raw gate | `data/validation_results/<successful_batch_id>/grammy_raw_validation.json` | Grammy extraction reconciles and raw checks pass | Choose same Test A batch. |
-| E09 | Test A prepared fact | `data/validation_results/<successful_batch_id>/prepared_fact_validation.json` | Prepared fact rules DQ09–DQ13 pass | Choose same Test A batch. |
-| E10 | Test A prepared artist | `data/validation_results/<successful_batch_id>/prepared_dim_artist_validation.json` | Artist key uniqueness and Grammy attribute domains pass | Choose same Test A batch. |
-| E11 | Load gating | `docs/evidence/testA_grid.png` and `load_dw` task log | Load succeeds only after prepared gate succeeds | Capture Grid/Graph plus task log. |
-| E12 | Test A load summary | `docs/evidence/testA_load_summary.txt` | Baseline fact and dimension counts | Present in archive; refresh if the final run changes. |
-| E13 | Test B test file | `data/test/spotify_popularity_negativa.csv` | Synthetic row with `popularity=-5` triggers DQ03 | Present in archive or regenerate with `make-test-batch`. |
-| E14 | Test B DAG | `docs/evidence/testB_grid.png` | Spotify raw validation fails and downstream tasks are blocked | **Capture from Airflow UI.** |
-| E15 | Test B failed task | `docs/evidence/testB_validate_spotify_log.txt` | DQ03 error and offending value are visible | Present in archive; make sure it corresponds to the final Test B batch. |
-| E16 | Test B DW unchanged | `docs/evidence/testB_dw_status.txt` | DW counts did not change after Test B | Present in archive; refresh before/after values from the final test. |
-| E17 | CLI safe rerun | `docs/evidence/rerun_check.txt` | Before/after counts, hashes and duplicate checks pass | Present in archive but must be regenerated after final code/data changes. |
-| E18 | Retry policy | `docs/evidence/retry_evidence.txt` | Active DAG retry counts and delays | Present in archive; it documents settings unless an actual retry log is shown. |
-| E19 | Successful GX output | `data/validation_results/<successful_batch_id>/` | JSON results for all raw/prepared validation objects in a successful run | Keep all required JSONs for one identified successful batch. |
-| E20 | Failed GX output | `data/validation_results/<testB_batch_id>/spotify_raw_validation.json` | The raw Spotify Critical failure is machine-readable | Keep the JSON from the controlled-failure batch. |
-| E21 | KPI cross-check | `docs/evidence/kpi_crosscheck.txt` and `kpi_crosscheck_report.json` | K1–K6 SQL views match pandas calculations from the DW tables for the report's timestamp | Present in archive; rerun `kpi-crosscheck` after changes. |
-
-### Additional screenshots required by Workshop-2 §8.3
-
-Screenshots must be readable, cropped to the relevant evidence, and accompanied by a short explanation of the claim they support.
-
-- **[SCREENSHOT REQUIRED — ARCHITECTURE/DAG]** Paste a picture of the conceptual architecture or the Airflow DAG task structure. The editable pipeline source is `docs/pipeline_architecture.mmd`.
-- **[SCREENSHOT REQUIRED — TEST A]** `docs/evidence/testA_grid.png` and `docs/evidence/testA_load_log.png`.
-- **[SCREENSHOT REQUIRED — TEST B]** `docs/evidence/testB_grid.png` and `docs/evidence/testB_validate_spotify_log.png` (or the text log plus Grid screenshot).
-- **[SCREENSHOT REQUIRED — POWER BI]** `docs/evidence/dashboard_overview.png`, `dashboard_k1.png`, `dashboard_k2_k3.png`, `dashboard_k4.png`, and `dashboard_k5_k6.png`.
-
-The screenshots are intentionally placeholders: this README does not claim images exist in the ZIP until you capture and add them.
-
-## 18. Repository structure
+## 17. Repository structure
 
 ```text
 workshop-2/
@@ -818,8 +762,4 @@ workshop-2/
 └── README.md
 ```
 
-Runtime artifacts may be created under `data/work/`, `data/validation_results/`, `data/output/`, and `logs/`. The final repository should retain raw CSV sources, code, SQL, GX configuration, notebooks, required evidence, `.env.example`, the star-schema source and image, and this README. Do not include real credentials. Move unused legacy DAG files outside the active `dags/` folder if you do not want them to appear in the Airflow UI.
-
 ---
-
-**Documentation consolidation note:** The quality-risk catalogue, transformation decision records, GX mapping, dimensional data dictionary, traceability matrix, failure/retry policy, reliability evidence register, execution guide, assumptions, and dashboard design information are incorporated into this README so those supporting Markdown files are not required for the explanation of the submitted solution. Keep `docsWorkshop/star_schema.mmd` and `docsWorkshop/star_schema.png`; they are separate dimensional-model artifacts.
