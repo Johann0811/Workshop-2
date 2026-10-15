@@ -1,14 +1,11 @@
-# Workshop 2 — Reliable Batch Data Pipeline
+# Workshop 2. Reliable Batch Data Pipeline
 
-**Course:** ETL — Data Engineering and Artificial Intelligence (UAO)  
 **Orchestrator:** Apache Airflow 3.1.8 (TaskFlow API)  
 **Database:** MySQL 8.0  
 **Data quality:** Great Expectations 1.23.1  
 **Analytics:** MySQL KPI views and Power BI
 
 This repository implements a batch ETL pipeline that integrates Spotify track listings with Grammy Awards records, validates data at raw and prepared gates, and loads a dimensional MySQL Data Warehouse. Airflow orchestrates the assessed workflow; Great Expectations evaluates quality rules; SQL views provide six KPIs for Power BI.
-
-> **Engineering principle:** reliability means failures are anticipated, controlled, observable, and safe to recover from—not that failures never happen.
 
 ## Contents
 
@@ -48,14 +45,12 @@ The objective is to integrate the two sources into a trusted dimensional Data Wa
 - Load the MySQL star schema transactionally and expose six DW-backed KPI views to Power BI.
 - Demonstrate successful execution, a controlled critical failure, and safe reruns.
 
-**Out of scope**
+**Out of scope (things that are not included in this workshop)**
 
 - Causal conclusions between Grammy recognition and Spotify popularity. The Spotify source has no date/year column.
-- Song-level matching between Grammy nominees and Spotify tracks; there is no shared track/work identifier.
 - Identifying actual 2019 Grammy winners from the supplied file. The `winner` column is `True` in every row.
-- Expanding every secondary Spotify collaborator into a separate fact row; the integration uses the primary artist.
-- External sources or an unsupported manual mapping between Spotify genres and Grammy categories.
-- Using `workers`, `img`, `published_at`, or `updated_at` as KPI inputs.
+- Expanding every secondary Spotify collaborator into a separate fact row, the integration uses the primary artist.
+- Use of external sources 
 
 ## 2. Analytical requirements and KPIs
 
@@ -120,12 +115,12 @@ flowchart TD
 
 ## 5. Raw profiling findings and quality-risk catalogue
 
-The raw profiling meets the categories required by Workshop-2 §6.3: structure, completeness, uniqueness/duplication, categorical content, numerical content, temporal content, and cross-source consistency. Profiling describes the data; it does not clean source files or substitute for GX validation.
+There are three different notebooks (two of them are the same but one of it is executed and the other is different)
 
 Two notebooks have different purposes:
 
-- `notebooks/initial_profiling.ipynb`: basic exploratory profiling of both raw CSVs locally; does not need MySQL and does not change either file.
-- `notebooks/data_profiling.ipynb`: the detailed Workshop-2 profile; Spotify is read from its CSV, while Grammy is read from `grammy_source.grammy_awards` by default. It is read-only for the source database and checks that the Spotify CSV hash is unchanged. The executed copy is `notebooks/data_profiling_exec.ipynb`.
+- `notebooks/initial_profiling.ipynb`: basic exploratory profiling of both raw CSVs locally.
+- `notebooks/data_profiling.ipynb`: the detailed Workshop-2 profile; Spotify is read from its CSV, while Grammy is read from the source database that is created for the csv and its executed copy is `notebooks/data_profiling_exec.ipynb`.
 
 The documented shared artist normalizer is `normalize_artist_name()` in `src/transform.py`: Unicode NFKD normalization, removal of combining marks, lowercasing, punctuation removal while preserving word/space characters, whitespace collapse, and trimming. Empty normalized values are not valid integration keys. The profile review notes 29,858 Spotify individual artist tokens and 29,757 normalized keys for one executed normalization pass; use actual current-code outputs when presenting a later rerun.
 
@@ -158,7 +153,7 @@ The documented shared artist normalizer is `normalize_artist_name()` in `src/tra
 | Grammy timestamps | All timestamp text is parseable; offsets include `-08:00` and `-07:00`; `published_at` year agrees with award `year` in only 1.8% | These are website publication/update dates, not award event dates. |
 | Genre vs category | Spotify has 114 genre labels and Grammy has 638 raw categories (629 normalized); no supplied shared vocabulary/key | Do not invent a genre-to-category bridge. |
 
-### Detailed profiling evidence for Workshop-2 §6.3
+### Detailed profiling evidence
 
 The table below consolidates the detailed row-level findings that support the risk catalogue.
 
@@ -217,8 +212,6 @@ The table below consolidates the detailed row-level findings that support the ri
 | **RK14** | 720 track IDs have differing popularity across genre listings | Deduplicating by track ID would discard source variation | Preserve track × genre grain. |
 | **RK15** | Normalized artist business key must be unique | Duplicate keys break dimension and foreign-key integrity | DQ12 plus unique constraint on `DIM_ARTIST.artist_key_norm`. |
 
-**Matching metric clarification:** the profiling review reports 1,199 of 2,969 resolvable Grammy rows matched (40.4%) under its exploratory matching sequence, and about 462 distinct Spotify primary artists with Grammy matches. Those values describe different units. The pipeline calculates its own per-batch `grammy_match_rate_pct` from the transformation metadata; use that batch report for the actual DQ15 result rather than treating an exploratory notebook statistic as an interchangeable denominator.
-
 ## 6. Quality rules and Great Expectations mapping
 
 The implementation defines 15 rules (DQ01–DQ15). Severity is an engineering policy linked to source contracts, profiling risks, analytical requirements, and prepared-data invariants.
@@ -274,11 +267,7 @@ Great Expectations Core 1.23.1 uses a persistent file-based context under `gx/`.
 | GX23 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | Helper `dq14_status_coherent` = 1 | Critical; status agrees with counts. |
 | GX24 | DQ15 | Custom prepared check | Python match-rate assertion | `grammy_match_rate_pct` from batch metadata | Critical; match rate >= 10%; not a native GX expectation. |
 
-Helper columns (`dq08_row_count`, `dq13_zero_coherent`, `dq13_top10_coherent`, `dq14_status_coherent`) are created in memory for validation and are not persisted to the DW. Critical failures raise an error and block downstream work/load. Warning failures are recorded and may continue according to the documented policy.
-
 ## 7. Transformation and integration decisions
-
-Transformation applies documented engineering rules after the raw validation gates. The raw inputs are not altered merely to make validation pass.
 
 | Decision | Rule / fields | Observed before → after | Rationale and exception handling | Analytical impact |
 |---|---|---|---|---|
@@ -296,8 +285,7 @@ Transformation applies documented engineering rules after the raw validation gat
 - **Join strategy:** aggregate resolvable Grammy rows by normalized artist first, then left-join the aggregation to Spotify primary artists. This prevents many-to-many row explosion and preserves Spotify artists without a Grammy match.
 - **Display name:** use the most frequent observed Spotify primary-artist spelling for a normalized key.
 - **Status:** derive `grammy_status`, `grammy_wins_1958_2018`, `grammy_records_2019`, `has_grammy_record`, and `wins_band` from the resolved artist counts.
-- **Unmatched Grammy names:** tracked in per-batch metadata; they are not inserted as standalone rows into `DIM_ARTIST` because that dimension represents Spotify primary artists.
-- **Reconciliation:** every candidate fact row must be accounted for by raw rows minus exact copies minus quarantined rows; the fact count must not change unexpectedly during the artist-aggregation join.
+- **Reconciliation:** every candidate fact row is accounted for by raw rows minus exact copies minus quarantined rows.
 
 ## 8. Dimensional model and data dictionary
 
@@ -316,7 +304,7 @@ Editable dimensional diagram: [`docs/star_schema.mmd`](doc/star_schema.mmd). DDL
 | `track_name` | `VARCHAR(600)` | Nullable | Track display name. |
 | `album_name` | `VARCHAR(300)` | Nullable | Album display name. |
 | `artists_raw` | `VARCHAR(1000)` | Nullable | Original semicolon-separated artist credit list. |
-| `n_artists` | `TINYINT` | Not null, default 1 | Number of credited artists. |
+| `n_artists` | `TINYINT` | Not null | Number of credited artists. |
 
 ### DIM_ARTIST
 
@@ -324,11 +312,11 @@ Editable dimensional diagram: [`docs/star_schema.mmd`](doc/star_schema.mmd). DDL
 |---|---|---|---|
 | `artist_key` | `INT AUTO_INCREMENT` | Primary key | Surrogate key. |
 | `artist_key_norm` | `VARCHAR(150)` | Unique, not null | Normalized artist business key. |
-| `artist_name` | `VARCHAR(150)` | Not null | Display name (most frequent primary-artist spelling). |
-| `grammy_wins_1958_2018` | `SMALLINT` | Not null, default 0 | Count of Grammy source rows from 1958–2018 under the documented historical-award assumption. |
-| `grammy_records_2019` | `SMALLINT` | Not null, default 0 | Count of 2019 records; not counted as wins. |
+| `artist_name` | `VARCHAR(150)` | Not null | Display name of the artist. |
+| `grammy_wins_1958_2018` | `SMALLINT` | Not null | Count of Grammy source rows from 1958–2018 under the documented historical-award assumption. |
+| `grammy_records_2019` | `SMALLINT` | Not null | Count of 2019 records; not counted as wins. |
 | `grammy_status` | `VARCHAR(30)` | Not null | `historical winner`, `winner + 2019`, `2019 only`, or `no record`. |
-| `has_grammy_record` | `TINYINT` | Not null, default 0 | Binary flag indicating an associated Grammy record. |
+| `has_grammy_record` | `TINYINT` | Not null | Binary flag indicating an associated Grammy record. |
 | `wins_band` | `VARCHAR(20)` | Not null | `none`, `1`, `2-4`, `5-9`, or `10+`. |
 
 Only primary artists found in Spotify are members of `DIM_ARTIST`; Grammy-only names are recorded for reconciliation but are not standalone dimension members.
