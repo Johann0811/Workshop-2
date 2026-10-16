@@ -462,7 +462,7 @@ python main.py create-dw
 
 Expected Airflow version: `3.1.8`. Open `http://localhost:8080` and use the local credentials configured for Airflow in `.env`.
 
-### Test A. execute through Airflow
+### Execution through Airflow
 
 1. Find `reliable_music_pipeline` in the Airflow UI dags section.
 2. Click **Trigger DAG**.
@@ -495,7 +495,7 @@ python main.py status
 
 If you don't want to open the interactive container shell you can run all these commands but adding at the start `docker compose run --rm tools` and then you put the command
 
-### Test B. controlled failure from Airflow
+### How to run the controlled failure test.
 
 1. In Airflow, go to the dag section in dags and click on the Trigger button and there would show a path under Run parameters, to run the controlled failure you must change that path listed there to this one:
 
@@ -504,6 +504,14 @@ If you don't want to open the interactive container shell you can run all these 
   "spotify_path": "/opt/airflow/data/test/spotify_popularity_negativa.csv"
 }
 ```
+
+### Rerun
+
+```powershell
+python main.py rerun-check
+```
+
+This would rerun the pipeline but with the same parameters than the previous run, no rows are duplicated and the rerun would show a the row counts before and after the rerun and would compare them in the output and create a rerun_check.txt report in docs/evidence/ showing a OVERALL RESULT: PASS like in the output at the end if the rerun didn't duplicate any rows .
 
 ### Notebook profiling
 

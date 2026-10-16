@@ -15,13 +15,43 @@ os.environ["GRAMMY_MYSQL_URL"] = os.getenv(
     "GRAMMY_MYSQL_URL",
     "mysql+pymysql://grammy_user:grammy_pass@mysql:3306/grammy_source"
 )
-os.environ["DATA_DIR"] = os.getenv("DATA_DIR", "/opt/airflow/data/raw")
-os.environ["SAVE_EVIDENCE"] = "1"
+# Ensure DATA_DIR points to the directory containing spotify_dataset.csv
+current_data_dir = Path(os.getenv("DATA_DIR", ""))
+if not (current_data_dir / "spotify_dataset.csv").is_file():
+    candidates = [
+        Path("/opt/airflow/data/raw"),
+        Path("data/raw"),
+        Path("/opt/airflow/dataWorkshop"),
+        Path("dataWorkshop"),
+    ]
+    for c in candidates:
+        if (c / "spotify_dataset.csv").is_file():
+            os.environ["DATA_DIR"] = str(c.resolve())
+            break
 
-notebook_path = Path("/opt/airflow/notebooks/data_profiling_exec.ipynb")
+os.environ["SAVE_EVIDENCE"] = os.getenv("SAVE_EVIDENCE", "1")
+
+# Determine input notebook path
+if len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
+    input_candidate = Path(sys.argv[1])
+else:
+    docker_default = Path("/opt/airflow/notebooks/data_profiling.ipynb")
+    local_default = Path("notebooks/data_profiling.ipynb")
+    input_candidate = docker_default if docker_default.is_file() else local_default
+
+notebook_path = input_candidate.resolve()
 if not notebook_path.is_file():
     print(f"Error: {notebook_path} does not exist.")
     sys.exit(1)
+
+# Determine output notebook path
+inplace = "--inplace" in sys.argv
+if inplace:
+    output_path = notebook_path
+elif len(sys.argv) > 2 and not sys.argv[2].startswith("--"):
+    output_path = Path(sys.argv[2]).resolve()
+else:
+    output_path = notebook_path.parent / f"{notebook_path.stem}_exec.ipynb"
 
 with open(notebook_path, "r", encoding="utf-8") as f:
     nb = json.load(f)
@@ -84,8 +114,10 @@ for idx, cell in enumerate(nb["cells"]):
         traceback.print_exc()
         sys.exit(1)
 
-with open(notebook_path, "w", encoding="utf-8") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(nb, f, indent=1)
 
 print(f"\nSuccessfully executed all {exec_count - 1} code cells!")
-print(f"Preserved original notebooks/data_profiling.ipynb untouched.")
+print(f"Saved executed notebook to: {output_path}")
+if output_path != notebook_path:
+    print(f"Preserved original {notebook_path.name} untouched.")
