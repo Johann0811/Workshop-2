@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "d65cf058-2bc3-4564-b4ff-b10a4bb1028f",
+      "id": "6b598bd2-41da-4123-abc9-5404861dc85b",
       "kwargs": {
         "column_set": [
           "year",
@@ -19,7 +19,7 @@
       "type": "expect_table_columns_to_match_set"
     },
     {
-      "id": "f72fafdf-3397-4256-b398-45ecc7e4a280",
+      "id": "0a9d487d-8195-4ef8-a133-bb0aafbc49cb",
       "kwargs": {
         "column": "year"
       },
@@ -31,7 +31,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "2edf262a-f153-44d2-9a5f-f4ac7ff60241",
+      "id": "d5a3973a-33d4-4c2e-8614-d0a9fb101379",
       "kwargs": {
         "column": "year",
         "max_value": 2019.0,
@@ -45,7 +45,7 @@
       "type": "expect_column_values_to_be_between"
     },
     {
-      "id": "220a32eb-98a3-4d68-9e66-cb0528b3d0bd",
+      "id": "ad8bef0d-dba4-4277-b35d-62e9c55511fd",
       "kwargs": {
         "column": "category"
       },
@@ -57,7 +57,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "341907fa-511c-4cc3-bc15-e2668b71ddb7",
+      "id": "24887dd4-8ed5-4f8c-8463-3079c5a4a141",
       "kwargs": {
         "value": 4810
       },
@@ -69,7 +69,7 @@
       "type": "expect_table_row_count_to_equal"
     },
     {
-      "id": "568fc66c-d7fa-4cc9-840a-404335f17b98",
+      "id": "b2997eb5-5e3f-4ac3-b3e8-01374b95b4d5",
       "kwargs": {
         "column": "dq08_row_count",
         "max_value": 2.0,

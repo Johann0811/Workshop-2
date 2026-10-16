@@ -473,8 +473,6 @@ Expected Airflow version: `3.1.8`. Open `http://localhost:8080` and use the loca
  python main.py status
 ```
 
-docker compose run --rm tools 
-
 ### Create KPI views and cross-check
 
 After the DW schema and a successful load:
@@ -491,7 +489,7 @@ The cross-check calculates K1–K6 from DW tables with pandas, compares them wit
 running with this command from console would uss the shared stage functions, validates raw and prepared data, and only loads after the validation result permits it, but it doesn't run the dag from airflow:
 
 ```powershell
-tools python main.py run-pipeline
+python main.py run-pipeline
 python main.py status
 ```
 

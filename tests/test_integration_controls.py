@@ -51,10 +51,29 @@ def test_validate_prepared_persists_dq15(tmp_path):
     df_artist["has_grammy_record"] = df_artist["has_grammy_record"].astype("int8")
     df_artist.to_parquet(artist_file, index=False)
 
+    track_file = tmp_path / "dim_track.parquet"
+    df_track = pd.DataFrame({
+        "track_id": ["t1", "t2"],
+        "track_name": ["Song 1", "Song 2"],
+        "album_name": ["Album 1", "Album 2"],
+        "artists_raw": ["Artist 1", "Artist 2"],
+        "n_artists": [1, 1],
+    })
+    df_track["n_artists"] = df_track["n_artists"].astype("int8")
+    df_track.to_parquet(track_file, index=False)
+
+    genre_file = tmp_path / "dim_genre.parquet"
+    df_genre = pd.DataFrame({
+        "track_genre": ["pop", "rock"],
+    })
+    df_genre.to_parquet(genre_file, index=False)
+
     meta = {
         "batch_id": "test_batch_dq15",
         "fact_path": str(fact_file),
         "dim_artist_path": str(artist_file),
+        "dim_track_path": str(track_file),
+        "dim_genre_path": str(genre_file),
         "raw_spotify_rows": 2,
         "exact_copies_removed": 0,
         "quarantined_rows": 0,
