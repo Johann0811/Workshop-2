@@ -523,6 +523,20 @@ python -m venv .venv
 python -m pip install -r requirementsnotebook.txt
 ```
 
+if you want to run the notebook of the detailed profiling you need to run this command inside the docker container in which the manual test are made and then execute this command that would create the notebook data_profiling_exec.ipynb (the notebook data_profiling.ipynb is already fully run):
+
+```powershell
+python scripts/run_notebook.py
+```
+
+### How to run the tests for the project
+
+If you want to run the tests that are made to validate the correct funtioning of the pipeline you need to run this command inside the docker container with the following command:
+
+```powershell
+pytest -v
+```
+
 ### Reset and teardown
 
 ```powershell
@@ -563,6 +577,7 @@ docker compose down -v
 
 - The project runs on a single Docker host using Airflow LocalExecutor.
 - Airflow 3.1.8 and MySQL 8.0 are used. The configuration includes `SQL_ENGINE_COLLATION_FOR_IDS=utf8mb3_bin` to avoid Airflow internal ID index-length issues in the selected MySQL setup.
+- Automated Airflow initialization fix (`docker/patch_db_manager.py`): On completely fresh/empty MySQL database volumes, Airflow 3.1.8's `BaseDBManager.init_db()` leaves an uncommitted SQLAlchemy read session open after checking existing revisions (`get_current_revision()`). Under MySQL 8.0, this active transaction holds a Shared Metadata Lock (MDL) that blocks Alembic's separate DDL connection (`command.stamp()` / table creation) indefinitely. To ensure fully unattended, reproducible startup without requiring manual intervention to kill locked connections, `docker/patch_db_manager.py` is applied during the Docker image build to commit and release the session before Alembic runs.
 
 
 ## 17. Repository structure
@@ -586,8 +601,9 @@ actividadetl/
 │   ├── work/                         # Batch Parquet and metadata, runtime, Git-ignored
 │   └── validation_results/           # Great Expectations JSON reports, runtime, Git-ignored
 ├── docker/
-│   └── mysql-init/
-│       └── 01_init_databases.sql
+│   ├── mysql-init/
+│   │   └── 01_init_databases.sql
+│   └── patch_db_manager.py  # Patch for the infinite up loop in airflow-init-1 container
 ├── docs/
 │   ├── evidence/                      # Validation, cross-check and rerun evidence
 │   ├── Dashboard and Graphics Workshop-2.pbix

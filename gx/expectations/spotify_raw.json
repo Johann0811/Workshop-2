@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "84e72b0e-f6b1-45ac-a99d-6bdd27c63ff5",
+      "id": "cb85d3e7-c414-42c4-9cf2-29aacdb372dd",
       "kwargs": {
         "column_set": [
           "track_id",
@@ -21,7 +21,7 @@
       "type": "expect_table_columns_to_match_set"
     },
     {
-      "id": "18f2f296-da12-49bd-b7e3-e331b7098259",
+      "id": "868a2097-901e-4878-9d15-602d53402d22",
       "kwargs": {
         "column": "track_id"
       },
@@ -33,7 +33,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "92cee94f-6965-4eda-9d9c-2e64e1ab81ca",
+      "id": "c8659172-f578-48ce-93d1-0dc1593f4bf6",
       "kwargs": {
         "column": "track_genre"
       },
@@ -45,7 +45,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "022ed6cc-b15b-4c36-aab6-4036bd1d0a33",
+      "id": "1d2ae265-c717-4970-bdeb-51e39a3414c9",
       "kwargs": {
         "column": "popularity"
       },
@@ -57,7 +57,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "449daa5c-53bf-4318-9070-b1602d20a3d8",
+      "id": "f3340ea2-37e5-4857-95eb-64e50a66ae7c",
       "kwargs": {
         "column": "popularity",
         "type_": "int64"
@@ -70,7 +70,7 @@
       "type": "expect_column_values_to_be_of_type"
     },
     {
-      "id": "863d1a35-132c-472f-9c9e-ee0d89b7bc77",
+      "id": "216d062f-344a-4376-ae13-2608cfad5f9c",
       "kwargs": {
         "column": "popularity",
         "max_value": 100.0,
@@ -84,7 +84,7 @@
       "type": "expect_column_values_to_be_between"
     },
     {
-      "id": "a0d9beac-3b98-4cac-9c98-bd46a6df71ff",
+      "id": "4c9a7f1a-cc6e-45f3-b5f1-3c5cfcd08e78",
       "kwargs": {
         "column_list": [
           "track_id",
@@ -99,7 +99,7 @@
       "type": "expect_compound_columns_to_be_unique"
     },
     {
-      "id": "0b0dacde-e7c6-45ce-a946-fcaae59cc547",
+      "id": "b2373ca4-2b55-4f9d-83aa-68014f4042f9",
       "kwargs": {
         "column": "artists",
         "mostly": 0.99
