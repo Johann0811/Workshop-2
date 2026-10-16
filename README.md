@@ -31,7 +31,7 @@ This repository implements a batch ETL pipeline that integrates Spotify track li
 
 ## 1. Problem, objective, and scope
 
-Spotify provides a snapshot of track popularity, audio features, and genre. The Grammy dataset records names, categories, and years associated with Grammy Awards. The only usable integration attribute shared by the sources is artist name; neither source provides a common artist identifier.
+Spotify provides a snapshot of track popularity, audio features, and genre. The Grammy dataset records names, categories, and years associated with Grammy Awards. The only usable integration attribute shared by the sources is artist name.
 
 The objective is to integrate the two sources into a trusted dimensional Data Warehouse and answer three analytical requirements while keeping source-quality issues visible and preventing invalid prepared data from being loaded.
 
@@ -54,35 +54,31 @@ The objective is to integrate the two sources into a trusted dimensional Data Wa
 
 ## 2. Analytical requirements and KPIs
 
-| ID | Analytical requirement | Required data | KPI(s) | Result / level of detail |
+| ID | Analytical requirement | Required data | Expected KPI(s) | Required level of detail |
 |---|---|---|---|---|
-| **R1** | Which genres have a higher share of Spotify catalogue listings associated with artists who have a Grammy record? | Spotify `track_genre`, primary artist; Grammy-derived artist record/status | **K1:** share associated with Grammy-record artists by genre | Genre × listing; interpreted as a rate over track–genre fact rows, not unique artists. |
-| **R2** | How does popularity differ between artists with historical Grammy records (1958–2018) and artists with no record, and how does it vary by award band? | Spotify `popularity`; artist-level `grammy_wins_1958_2018`, `grammy_status`, `wins_band` | **K2:** mean/median by group; **K3:** Top-10% share and ratio; **K4:** popularity and Top-10% share by award band | `with_award` vs `no_record`, then bands `1`, `2-4`, `5-9`, `10+`; `only_2019` is excluded from award-outcome comparisons. |
-| **R3** | What share of listings has zero traction among Grammy-record artists versus the rest, and how does it vary by genre? | `popularity`, `is_zero_traction`, artist Grammy record flag, genre | **K5:** zero-traction share by segment; **K6:** zero-traction share by genre among Grammy-associated listings | Segment and genre; `popularity = 0` is a project-defined proxy for zero traction, not a direct stream/revenue measure. |
+| **R1** | In which genres is the presence of artists with a Grammy record concentrated? | Spotify: track_id, track_genre, artists. Grammy: year, artist, and nominee and category | **K1:** Percentage of tracks by artists with a Grammy record, by genre. | Track × genre, grouped by genre and Grammy status |
+| **R2** | Do artists who have won a Grammy (1958–2018) have higher popularity than those who have not, and does it grow with the number of awards? | Spotify: track_id, artists, popularity. Grammy: year, artist, and nominee and category (only for Best New Artist) | **K2:** Mean and median popularity, artists with an award vs. artists with no Grammy record. **K3:** Percentage in the top 10% by group and ratio (with award ÷ no Grammy record) **K4:** K2 and K3 by award band (1, 2–4, 5–9, 10+) | Track × genre, with artist attributes: awards 1958–2018, 2019 records and status |
+| **R3** | What share of the catalog of artists with a Grammy record has zero traction (popularity = 0)? | Spotify: track_id, track_genre, artists (primary), popularity. Grammy: year, artist, and nominee and category. | **K5:** Percentage of tracks with popularity 0, artists with a Grammy record vs. rest of the catalog **K6:** K5 by genre | Track × genre, grouped by genre and Grammy status |
 
 ### KPI definitions used by the SQL views
 
 | KPI | Definition | Interpretation / caution |
 |---|---|---|
-| **K1 Grammy-record share by genre** | `AVG(has_grammy_record) * 100`, grouped by `track_genre` in `VW_KPI_BASE` | Share of fact listings in each genre linked to Grammy-record artists. It is not the share of distinct artists. |
-| **K2 Popularity comparison** | Mean and median `popularity` for `with_award` and `no_record` | Descriptive group comparison only; no causal inference. |
+| **K1 Grammy-record share by genre** | `AVG(has_grammy_record) * 100`, grouped by `track_genre` in `VW_KPI_BASE` | Share of fact listings in each genre linked to Grammy-record artists. |
+| **K2 Popularity comparison** | Mean and median `popularity` for `with_award` and `no_record` | Descriptive group comparison. |
 | **K3 Top-10% share and ratio** | Percentage of each group with `is_top10_global = 1`; ratio = `with_award` percentage / `no_record` percentage | p90 is calculated for the current batch. It was 63 in the profiled snapshot. |
-| **K4 Award bands** | Mean, median, and Top-10% share by `wins_band` | Review `sample_status`; small bands require caution. |
+| **K4 Award bands** | Mean, median, and Top-10% share by `wins_band` | Review `sample_status`, small bands (29 < data). |
 | **K5 Zero traction by segment** | `AVG(is_zero_traction) * 100` for `artists_with_grammy` and `rest_of_catalog` | `is_zero_traction = (popularity == 0)`. |
-| **K6 Zero traction by genre** | Zero-traction listings among Grammy-associated rows divided by all Grammy-associated listings in the genre | `no data` means denominator zero, not a rate of 0%. `small sample` means 1–29 Grammy-associated listings; `ok` means at least 30. |
-
-SQL definitions are in `sql/kpi_queries.sql`. Creating the views (`create-kpi-views`) and comparing them with pandas (`kpi-crosscheck`) are separate commands; neither runs automatically when a DAG is triggered.
+| **K6 Zero traction by genre** | Zero-traction listings among Grammy-associated rows divided by all Grammy-associated listings in the genre | `no data` means that genre doesn't have tracks that have won the grammy. `small sample` means 1–29 Grammy-associated listings; `ok` means at least 30. |
 
 ## 3. Data sources
 
 | Source | Provided form | Observed shape | How the pipeline reads it | Path / table |
 |---|---|---:|---|---|
 | Spotify tracks | CSV, UTF-8 | 114,000 rows × 21 columns (20 data columns + exported index) | `extract_spotify` reads the file directly | `data/raw/spotify_dataset.csv`; container path `/opt/airflow/data/raw/spotify_dataset.csv` |
-| Grammy Awards | CSV used for source preparation | 4,810 rows × 10 columns | `prepare-source` loads the CSV into MySQL; operational `extract_grammys` queries the MySQL source table, **not the CSV** | CSV: `data/raw/the_grammy_awards.csv`; table: `grammy_source.grammy_awards` |
+| Grammy Awards | CSV used for source preparation | 4,810 rows × 10 columns | `prepare-source` loads the CSV into MySQL; operational `extract_grammys` queries the MySQL source table | CSV: `data/raw/the_grammy_awards.csv`; table: `grammy_source.grammy_awards` |
 
-Source preparation is not the final ETL load. `prepare-source` fills and reconciles the operational Grammy source table. `load_dw` writes validated prepared outputs into the dimensional Data Warehouse (`dw`). The raw CSVs are source inputs and must remain unchanged.
-
-The source-preparation logic converts timestamp text to UTC-compatible MySQL DATETIME values, converts `winner` to a MySQL-compatible boolean value, converts empty fields to SQL `NULL`, inserts in chunks, and reconciles the imported row count in source-control metadata.
+The source-preparation logic converts timestamp text to UTC-compatible MySQL DATETIME values, converts `winner` to a MySQL-compatible boolean value and converts empty fields to SQL `NULL`.
 
 ## 4. Pipeline architecture and responsibilities
 
@@ -109,88 +105,44 @@ flowchart TD
 | `src/transform.py` | Deduplicates, quarantines, normalizes, integrates, derives artist statuses and popularity flags, and writes prepared Parquet files. |
 | `src/load.py` | Creates/resets DW schema and performs a transactional, chunked upsert of dimensions, fact, quarantine, and batch control. |
 | `src/kpis.py` | Creates six SQL KPI views, recalculates KPIs from DW tables with pandas, compares calculations against SQL views, and writes cross-check evidence. |
-| `main.py` | Administrative/verification CLI plus a direct end-to-end ETL command `run-pipeline`; this command does **not** create an Airflow DAG Run. |
+| `main.py` | Administrative/verification CLI plus a direct end-to-end ETL. |
 | `gx/` | Persistent Great Expectations context, expectation suites, validation definitions, and checkpoints. |
 | `sql/source_setup.sql`, `sql/dw_schema.sql`, `sql/kpi_queries.sql` | Source DDL, dimensional/control DDL, and DW KPI views. |
 
 ## 5. Raw profiling findings and quality-risk catalogue
 
-There are three different notebooks (two of them are the same but one of it is executed and the other is different)
-
-Two notebooks have different purposes:
+There are two notebooks each one with different purposes:
 
 - `notebooks/initial_profiling.ipynb`: basic exploratory profiling of both raw CSVs locally.
-- `notebooks/data_profiling.ipynb`: the detailed Workshop-2 profile; Spotify is read from its CSV, while Grammy is read from the source database that is created for the csv and its executed copy is `notebooks/data_profiling_exec.ipynb`.
+- `notebooks/data_profiling.ipynb`: the detailed Workshop-2 profile, reading spotify from its CSV, while Grammy is read from the source database, its purpose is to profile interesting and useful findings in the initial profiling, how the tables would end after transform and which findings can be found there.
 
-The documented shared artist normalizer is `normalize_artist_name()` in `src/transform.py`: Unicode NFKD normalization, removal of combining marks, lowercasing, punctuation removal while preserving word/space characters, whitespace collapse, and trimming. Empty normalized values are not valid integration keys. The profile review notes 29,858 Spotify individual artist tokens and 29,757 normalized keys for one executed normalization pass; use actual current-code outputs when presenting a later rerun.
+The documented shared artist normalizer is `normalize_artist_name()` in `src/transform.py`: Unicode NFKD normalization, removal of combining marks, lowercasing, punctuation removal while preserving word/space characters, whitespace collapse, and trimming. Empty normalized values are not valid integration keys.
 
-### Main observed findings
+### Main profiling findings
 
-| Dataset / attribute | Observed finding | Engineering implication |
-|---|---|---|
-| Spotify structure | 114,000 × 21; 20 business/data columns plus `Unnamed: 0` export index | Drop the export index during transformation; do not treat it as a business key. |
-| Spotify completeness | Three null cells in one row: `artists`, `album_name`, `track_name`; its `track_id` is `1kR4gIb7nGxHPI3D2ifs59` | The missing-primary-artist row is quarantined with `missing_artist`. |
-| Spotify exact copies | 450 extra exact copies across the 20 data columns; 444 duplicate groups; 894 rows involved when both originals and copies are counted | Exclude `Unnamed: 0` from exact-equality comparison; deduplicate in TD01. |
-| Spotify track and genre | 89,741 distinct `track_id`; 16,299 tracks occur in multiple genres (23,809 cross-genre repeated rows) | `track_id` alone is not the fact grain; preserve track × genre. |
-| Spotify duplicate candidate key | After exact-copy removal, no `(track_id, track_genre)` pair remains repeated | DQ10 protects the prepared fact grain. |
-| Spotify popularity conflicts | 720 tracks have differing popularity across repeated genre listings | Do not collapse rows by `track_id` alone; the fact grain retains genre listing variation. |
-| Genre sampling | 114 genres, exactly 1,000 raw rows per genre | Raw row counts reflect the provided sampling design; interpret rates with this limitation. |
-| Artist credits | 26.4% of rows contain 2+ artists separated by `;`, up to 38 credits | Use primary artist consistently and preserve the original artist credit string. |
-| Popularity distribution | Mean 33.2; median 35; p25 17; p75 50; p90 63; p99 80 | Compute p90 per batch; 63 is the observed snapshot value, not a hard-coded permanent threshold. |
-| Zero popularity | 14.05% have popularity 0 compared with 1.88% at popularity 1 | Define and validate the zero-traction proxy explicitly. |
-| Audio domains | 90 rows have `loudness > 0`; 157 rows have `tempo <= 0`; 82 duration values are outside 1 ms–20 min; 1,136 rows have `time_signature` outside 3–7 | Sentinel or implausible values may affect optional audio summaries; audio-feature analysis is out of scope for KPIs. |
-| Spotify temporal coverage | No date/year/timestamp column | Cannot align popularity before/after Grammy years. |
-| Grammy structure | 4,810 × 10; years 1958–2019, 62 years, no year nulls | Reconcile extracted count with source-import control. |
-| Grammy artist completeness | 1,840 null `artist` values (38.3%); 1,758 are in 246 categories that never have a populated `artist`; `Song Of The Year` has 70/70 null | Nulls are partly structural; do not assume `nominee` is an artist in every category. |
-| Grammy other nulls | `workers`: 2,190 nulls (45.5%); `img`: 1,367 (28.4%); `nominee`: 6 | `workers` and `img` are profiled but not KPI inputs. |
-| Grammy winner flag | `winner` is `True` in all 4,810 rows (MySQL value `1`) | Zero variance; never use this column to distinguish winners from nominees. |
-| Grammy 2019 pattern | 433 rows across 84 categories; group sizes are 5–8 per category | Project assumption: 2019 rows are a nominee list / records with no known outcome, not confirmed wins. |
-| Grammy historical pattern | 4,346 `(year, category)` groups for 1958–2018; 4,315 have one row and 31 have two rows | Double rows are treated as ties/shared records by assumption, not exact duplicates. |
-| Grammy category labels | 638 raw category labels, 629 after normalization; two rows with extra spaces | Normalize category labels before grouping. |
-| Best New Artist | 66 records across 8 category spellings; 65 have null `artist`, where `nominee` supplies the artist name | Apply the nominee fallback only to Best New Artist when `artist` is empty. |
-| Generic artist marker | 66 Grammy rows use `(Various Artists)`; Spotify has one occurrence not in primary-artist position | Exclude the generic marker from artist matching. |
-| Artist name matching | No shared artist ID; matches depend on Unicode normalization and documented lead-artist/Best New Artist handling | Homonyms cannot be distinguished with the available data. A unique-artist count and a matched-row rate use different denominators and must not be mixed. |
-| Grammy timestamps | All timestamp text is parseable; offsets include `-08:00` and `-07:00`; `published_at` year agrees with award `year` in only 1.8% | These are website publication/update dates, not award event dates. |
-| Genre vs category | Spotify has 114 genre labels and Grammy has 638 raw categories (629 normalized); no supplied shared vocabulary/key | Do not invent a genre-to-category bridge. |
-
-### Detailed profiling evidence
-
-The table below consolidates the detailed row-level findings that support the risk catalogue.
-
-| Dataset / attribute                           | Profiling evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Potential quality risk                                                                                                                                                                        | Related requirement          |
-|:----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------|
-| Spotify / complete table                      | Structure: 114,000 rows × 21 columns (20 data columns + unnamed index); profile types {'decimal': 9, 'integer': 6, 'text': 5, 'boolean': 1}. Completeness: 3 null cells across artists, album_name, track_name; all on 1 row.                                                                                                                                                                                                                                             | Completeness: row without artist, album, or title cannot be assigned to an artist.                                                                                                            | R1–R3                        |
-| Spotify / Unnamed: 0                          | Structure: blank first header cell=True; values 0…113999 (114,000 unique); equals row number=True.                                                                                                                                                                                                                                                                                                                                                                        | Uniqueness: export artifact, not a business key; uniqueness can hide exact copies unless this column is excluded.                                                                             | — (traceability)             |
-| Spotify / track_id                            | Structure: 22-character alphanumeric pattern 100.00%; completeness: 0 nulls. Uniqueness: 89,741 distinct IDs in 114,000 rows; 24,259 excess rows = 450 exact copies + 23,809 cross-genre repeats (16,299 tracks span 2–9 genres). Numeric consistency: 720 tracks have differing popularity across rows.                                                                                                                                                                  | Exact copies break track × genre grain; one track may have different popularity on different genre rows.                                                                                      | R1–R3                        |
-| Spotify / track_genre                         | Categorical: 114 lowercase genres, 0 edge-space rows; rows per genre 1000–1000. Completeness: 0 nulls; after copy removal each genre has 904–1000 rows.                                                                                                                                                                                                                                                                                                                   | Validity: a fixed 1,000-row split per genre is a sample, not a measure of real catalog volume.                                                                                                | R1, R3                       |
-| Spotify / artists                             | Completeness: 1 null. Multivalued structure: 26.4% of rows have 2+ credited artists (max 38); 31,437 artist-list strings -> 29,858 individual names. Categorical: 1,974 individual names contain non-ASCII characters; 47 case-only collisions; 8 edge-space occurrences.                                                                                                                                                                                                 | Consistency: select first credited artist as primary; normalization should be Unicode-aware and tolerate case/spacing.                                                                        | R1–R3                        |
-| Spotify / album_name, track_name              | Completeness: 1 album null and 1 title null on the same row. Categorical: 46,589 distinct albums, 73,608 distinct titles; 7,991 titles are shared by 2+ track IDs (maximum 48: "Rockin' Around The Christmas Tree").                                                                                                                                                                                                                                                      | Uniqueness: track title is not a unique key and must not replace track_id.                                                                                                                    | — (descriptive)              |
-| Spotify / popularity                          | Numeric: integer 0–100; 0 out of range; mean 33.2, median 35, p25/p75/p90/p99=17/50/63/80; rows at 100: 2. Score 0 share 14.05% vs score 1 1.88%.                                                                                                                                                                                                                                                                                                                         | Validity: zero is the scale floor, not missingness; popularity is an undated relative snapshot. Global top-decile cutoff is >= 63 with 10.06% coverage.                                       | R2, R3                       |
-| Spotify / duration_ms                         | Numeric: 0.0 to 87.3 minutes; median 3.5 minutes, p99 8.8 minutes; 1 rows at zero; >10 min 603, >20 min 81, >60 min 16.                                                                                                                                                                                                                                                                                                                                                   | Validity: zero duration is implausible; very long values may be mixes or full-album uploads.                                                                                                  | —                            |
-| Spotify / explicit, mode, key                 | Categorical: explicit=True 8.6%; mode=1 63.8%; key range 0–11. Completeness: no null issue in these fields.                                                                                                                                                                                                                                                                                                                                                               | No material quality finding in the observed profile.                                                                                                                                          | —                            |
-| Spotify / seven audio features                | Numeric: danceability, energy, speechiness, acousticness, instrumentalness, liveness, valence all have 0 values outside [0,1] across all seven. instrumentalness median 0.00, zero 34.0%, >0.5 16.5%. 157 rows share zeros in tempo, danceability, speechiness, valence, and time_signature.                                                                                                                                                                              | Validity: block of 157 zero audio profiles is consistent with an audio-analysis failure, not a real signal.                                                                                   | —                            |
-| Spotify / loudness                            | Numeric: -49.5 to 4.5 dB; mean -8.3; 90 rows above 0 dB and 38 below −40 dB.                                                                                                                                                                                                                                                                                                                                                                                              | Validity: values above 0 dB and very low extremes merit verification.                                                                                                                         | —                            |
-| Spotify / tempo                               | Numeric: 0–243.4 BPM; mean 122.1; 157 rows at zero (same as the zero-audio block); 8 above 220 BPM.                                                                                                                                                                                                                                                                                                                                                                       | Validity: tempo=0 is not musically plausible and likely a sentinel value.                                                                                                                     | —                            |
-| Spotify / time_signature                      | Categorical counts: {0: 163, 1: 973, 3: 9195, 4: 101843, 5: 1826}; 163 rows have 0, of which 157 overlap tempo=0. Values 2, 6 and 7 are absent.                                                                                                                                                                                                                                                                                                                           | Validity: 0 is not a valid time signature; most zero values coincide with the zero-audio block.                                                                                               | —                            |
-| Grammy / complete table                       | Structure: 4,810 rows × 10 columns read from MySQL table grammy_source.grammy_awards. Actual MySQL column types are shown in Section 2.2. Per source preparation, published_at and updated_at are stored as UTC DATETIME with the original offset suffix removed; winner is stored as 1/0. Completeness: nulls {'nominee': 6, 'artist': 1840, 'workers': 2190, 'img': 1367}. Uniqueness profile: full-row duplicate count 0; (year, category, nominee) duplicate count 0. | Uniqueness: the natural candidate key includes nominee, which is null in 6 source records.                                                                                                    | R1–R3                        |
-| Grammy / year                                 | Temporal: 1958–2019; 62 years, missing years []; rows/year min 28, median 75, max 433 (433 records in 2019, 9.0%).                                                                                                                                                                                                                                                                                                                                                        | Consistency: 2019 accounts for ~9% of rows and has a different source grain from 1958–2018.                                                                                                   | R2                           |
-| Grammy / title                                | Categorical: 62 distinct titles, one per year=True; annual-title pattern with two spaces matches 100%; ordinal and parenthetical years agree with year=True / True.                                                                                                                                                                                                                                                                                                       | Redundant with year; double space is a small formatting inconsistency.                                                                                                                        | —                            |
-| Grammy / published_at, updated_at             | Temporal: stored UTC DATETIME values parseable 4810/4810 and 4810/4810; original CSV timezone suffixes are not present in the source table. Max distinct timestamp per award year 1 published / 1 updated; total distinct values 4 / 10; published_at range 2017-11-28–2020-05-19; updated_at range 2017-11-28–2020-09-01; updated < published in 0 rows; published year agrees with award year in 1.8%.                                                                  | Temporal semantics: timestamps refer to website publication/update, not award event dates; don't use as business event dates.                                                                 | —                            |
-| Grammy / category                             | Categorical: 638 raw labels -> 629 normalized; whitespace anomalies 2; top categories [('Song Of The Year', 70), ('Record Of The Year', 69), ('Album Of The Year', 66)]; single-row categories 224, with <=5 rows 385. Completeness: no nulls.                                                                                                                                                                                                                            | Consistency: spellings vary and award categories change over time; Best New Artist handling must account for variants.                                                                        | R1–R3 (Best New Artist rule) |
-| Grammy / nominee                              | Completeness: 6 nulls (Best New Country & Western Artist (1965); Best New Country & Western Artist Of 1964 (1964); Remixer Of The Year, Non-Classical (1997–1999); Remixer Of The Year, Non-classical (1998); Remixer of the Year, Non-Classical (2000)). Categorical: 4,131 distinct non-null values; whitespace anomalies 7. Meaning can be a work title or a person depending on category.                                                                             | Validity: nominee does not always denote an artist, so only the specific Best New Artist rule may use it as one.                                                                              | R1–R3 (Best New Artist only) |
-| Grammy / nominee + category (Best New Artist) | Cross-source: 66 rows in 8 category spellings; artist is null in 65 rows; nominee matches a Spotify primary key in 32. Outside this family, 1,769 rows have artist null and nominee present; 28 such nominees happen to match a Spotify artist.                                                                                                                                                                                                                           | Consistency: nominee is an artist name only for Best New Artist; using it generally would create false or uncertain artist relationships.                                                     | R1–R3 (Best New Artist rule) |
-| Grammy / artist                               | Completeness: 1,840 nulls (38.3%); 1,758 in 246 categories that always omit artist. Song Of The Year: 70/70 null. Categorical: 1,658 distinct, Featuring=86, '&'=411, With=20; non-ASCII rows=99.                                                                                                                                                                                                                                                                         | Completeness: nulls are structural, not random. Consistency: one string may combine multiple credited artists.                                                                                | R1–R3                        |
-| Grammy / workers                              | Completeness: 2,190 nulls (45.5%). Free-text credits: 1,132 semicolon strings; 1,400 with parentheses; 1,366 of artist-null rows have parentheses in workers.                                                                                                                                                                                                                                                                                                             | Validity: free-text mixes credits and roles; could be a secondary clue where artist is missing but should not be silently parsed as a clean key.                                              | — (optional)                 |
-| Grammy / img                                  | Completeness: 1,367 nulls (28.4%). Categorical: 3,443 HTTPS URLs; 1,463 distinct non-null URLs (URLs repeat).                                                                                                                                                                                                                                                                                                                                                             | No material analytical use for the requested KPIs; profile for completeness only.                                                                                                             | —                            |
-| Grammy / winner                               | Categorical: pandas dtype int64; stored database values {1: 4810}. Source preparation converts CSV True/False to MySQL boolean-compatible 1/0; in this observed table all stored values represent True.                                                                                                                                                                                                                                                                   | Semantics: the observed constant value does not distinguish winners from nominees; the notebook does not use this field to infer outcomes.                                                    | R2 (award assumption)        |
-| Grammy / year × category (source grain)       | Uniqueness: 1958–2018 has 4,346 combinations with sizes {1: 4315, 2: 31}; 2019 has 433 rows across 84 categories, group sizes {5: 79, 6: 1, 8: 4}; Record Of The Year 2019 has 8 nominees, stored winner values={'1'} (1 represents True).                                                                                                                                                                                                                                | Consistency: 1958–2018 appears to list award results; 2019 is a nominee list, so row grain differs. Historical interpretation remains an inference.                                           | R2                           |
-| Both / artist integration key                 | Cross-source: no shared ID; names only. Spotify 29,858 names -> 29,757 keys (99 multi-spelling keys); Grammy 1,658 artist strings -> 1,646 keys. 539 Grammy keys appear in Spotify; 1429 rows have a non-generic any-credit match; 483 of 17622 Spotify primary artists have a Grammy match.                                                                                                                                                                              | Consistency: name matching is vulnerable to homonyms and variants; multiple people may be merged into one string; most catalog artists have no counterpart.                                   | R1–R3                        |
-| Both / artist matching (resolvable rows)      | Cross-source: 1,199 of 2,969 resolvable Grammy rows (excluding Various Artists) match a Spotify primary artist: 40.4%. Step rates: {'A. Raw artist text': 1078, 'B. + Unicode normalization': 1117, 'C. + split Featuring credits': 1167, 'D. + Best New Artist nominee rule': 1199}.                                                                                                                                                                                     | Consistency: match coverage depends on the available names, the scope of each catalogue, normalization, and handling of Featuring and Best New Artist; a text match is not proof of identity. | R1–R3                        |
-| Both / "Various Artists"                      | Cross-source: 66 Grammy rows have artist='Various Artists'; Spotify has 1 rows with this credit, 0 as primary artist.                                                                                                                                                                                                                                                                                                                                                     | Consistency: generic marker could create false matches if matching any credited artist; exclude it from match denominator and keys.                                                           | R1–R3                        |
-| Both / time                                   | Temporal: Spotify has no date/year field; Grammy `year` spans 1958–2019; `popularity` is an undated snapshot.                                                                                                                                                                                                                                                                                                                                                             | Temporal consistency: popularity cannot be aligned before/after an award event with these sources.                                                                                            | R2                           |
-| Both / genre versus category                  | Cross-source: Spotify has 114 genres; Grammy has 638 raw categories (629 after normalization); no shared ID or directly equivalent vocabulary.                                                                                                                                                                                                                                                                                                                            | Consistency: there is no supported genre-to-award-category bridge; do not introduce external/manual mappings.                                                                                 | R1                           |
-
-
+| Dataset / attribute | Profiling evidence | Potential quality risk | Related requirement |
+| :--- | :--- | :--- | :--- |
+| Spotify / complete table | Structure: 114,000 rows × 21 columns (20 data columns + unnamed index); profile types {'decimal': 9, 'integer': 6, 'text': 5, 'boolean': 1}. Completeness: 3 null cells across artists, album_name, track_name; all on 1 row. | If a row lacks the artist, album, and title together, it cannot be reliably identified or assigned to an artist, retaining it without an explicit policy can distort counts or create unusable fact records. | R1–R3 |
+| Spotify / Unnamed: 0 | Structure: blank first header cell=True; values 0…113999 (114,000 unique); equals row number=True. | Using the sequential export index as a business key, or including it in exact-equality checks, can make duplicate rows appear unique and inflate retained row counts. | — |
+| Spotify / track_id | Structure: 22-character alphanumeric pattern 100.00%; completeness: 0 nulls. Uniqueness: 89,741 distinct IDs in 114,000 rows; 24,259 excess rows = 450 exact copies + 23,809 cross-genre repeats (16,299 tracks span 2–9 genres). Numeric consistency: 720 tracks have differing popularity across rows. | Retaining exact copies can inflate track–genre counts and KPI denominators. Repeated track_id values across different genres are valid under the declared grain; differing popularity across listings means popularity must not be assumed identical for every occurrence of a track. | R1–R3 |
+| Spotify / track_genre | Categorical: 114 lowercase genres, 0 edge-space rows, rows per genre 1000. Completeness: 0 nulls. after copy removal each genre has 904–1000 rows. | Because every genre has exactly 1,000 raw rows, raw counts reflect the supplied dataset construction or sampling, not real-world genre prevalence, so without the proper caution this can be interpreted in a bad way. | R1, R3 |
+| Spotify / artists | Completeness: 1 null. Multivalued structure: 26.4% of rows have 2+ credited artists (max 38); 31,437 artist-list strings -> 29,858 individual names. Categorical: 1,974 individual names contain non-ASCII characters; 47 case-only collisions; 8 edge-space occurrences. | Treating the full multi-artist string as one identity, or failing to normalize Unicode, case, and whitespace consistently, can create missed or incorrect Grammy matches and misclassify listings by artist status. | R1–R3 |
+| Spotify / album_name, track_name | Completeness: 1 album null and 1 title null on the same row. Categorical: 46,589 distinct albums, 73,608 distinct titles; 7,991 titles are shared by 2+ track IDs (maximum 48: "Rockin' Around The Christmas Tree"). | Using title or album text as a unique key can merge different tracks or create false source links; repeated titles across track IDs show that the title alone is not unique. | — |
+| Spotify / popularity | Numeric: integer 0–100; 0 out of range; mean 33.2, median 35, p25/p75/p90/p99=17/50/63/80; rows at 100: 2. Score 0 share 14.05% vs score 1 1.88%. | Treating zero as missing would undercount zero-popularity listings; interpreting this undated relative score as a historical or causal measure could also mislead comparisons with Grammy recognition. The Top-10% cutoff is snapshot/batch-dependent. | R2, R3 |
+| Grammy / complete table | Structure: 4,810 rows × 10 columns. Per source preparation, published_at and updated_at are stored as UTC DATETIME with the original offset suffix removed, winner is stored as 1/0. Completeness: nulls {'nominee': 6, 'artist': 1840, 'workers': 2190, 'img': 1367}. Uniqueness profile: full-row duplicate count 0. (year, category, nominee) duplicate count 0. | A null nominee leaves the candidate key (year, category, nominee) incomplete for six records. Any matching, deduplication, or reconciliation that relies on that key may be unable to identify those rows reliably. | R1–R3 |
+| Grammy / year | Temporal: 1958–2019; 62 years, rows/year min 28, median 75, max 433 (433 records in 2019, 9.0%). | Combining 2019 records with 1958–2018 as if they had the same meaning risks classifying nominees as confirmed winners and distorting historical award comparisons. | R2 |
+| Grammy / published_at, updated_at | Temporal: stored UTC DATETIME values parseable 4810/4810, original CSV timezone suffixes are not present in the source table. Max distinct timestamp per award year 1 published / 1 updated; total distinct values 4 / 10; published_at range 2017-11-28–2020-05-19; updated_at range 2017-11-28–2020-09-01; updated < published in 0 rows; published year agrees with award year in 1.8%. | Treating website publication/update timestamps as award-event dates can assign records to the wrong time period and create invalid temporal comparisons with Spotify popularity. | — |
+| Grammy / category | Categorical: 638 raw labels -> 629 normalized; whitespace anomalies 2; top categories [('Song Of The Year', 70), ('Record Of The Year', 69), ('Album Of The Year', 66)]; single-row categories 224, with <=5 rows 385. Completeness: no nulls. | Category label variants can split the same logical category across groups, while category definitions may change over time. This can distort category-level summaries and mishandle Best New Artist variants if normalization is inconsistent. | R1–R3 |
+| Grammy / nominee | Completeness: 6 nulls (Best New Country & Western Artist (1965); Best New Country & Western Artist Of 1964 (1964); Remixer Of The Year, Non-Classical (1997–1999); Remixer Of The Year, Non-classical (1998); Remixer of the Year, Non-Classical (2000)). Categorical: 4,131 distinct non-null values; whitespace anomalies 7. Meaning can be a work title or a person depending on category. | Using nominee as an artist identifier for every category risks matching song/work titles to Spotify artists. It should only be treated as an artist under the documented Best New Artist rule. | R1–R3 |
+| Grammy / nominee + category (Best New Artist) | Cross-source: 66 rows in 8 category spellings; artist is null in 65 rows; nominee matches a Spotify primary key in 32. Outside this family, 1,769 rows have artist null and nominee present; 28 such nominees happen to match a Spotify artist. | Using nominee as a fallback artist outside Best New Artist can produce false artist matches when nominee actually names a song or work rather than a person. | R1–R3 |
+| Grammy / artist | Completeness: 1,840 nulls (38.3%); 1,758 in 246 categories that always omit artist. Song Of The Year: 70/70 null. Categorical: 1,658 distinct, Featuring=86, '&'=411, With=20; non-ASCII rows=99. | The high number of null artist values means many Grammy rows cannot be linked directly to Spotify. Treating null as “no Grammy record” can undercount recognition; filling it indiscriminately from other text can create false matches. | R1–R3 |
+| Grammy / winner | Categorical: rows = 4810. Source preparation converts CSV True/False to MySQL boolean-compatible 1/0; in this observed table all stored values represent True (True = 1). | Because all 4,810 stored values are true, this field cannot distinguish winners from nominees in this source. Using it to classify winners would mislabel records and bias the award-based KPIs. | R2 |
+| Grammy / year × category | Uniqueness: 1958–2018 has 4,346 combinations with sizes {1: 4315, 2: 31}; 2019 has 433 rows across 84 categories, group sizes {5: 79, 6: 1, 8: 4}; Record Of The Year 2019 has 8 nominees, stored winner values={'1'} (1 represents True). | Assuming the same row grain and award-outcome meaning for every year risks treating the 2019 nominee list as final results. The interpretation of 1958–2018 as historical results is also an inference from the observed grain, not proof from winner. | R2 |
+| Both / artist integration key | Cross-source: no shared ID; names only. Spotify 29,858 names -> 29,757 keys; Grammy 1,658 artist strings -> 1,646 keys. 539 Grammy keys appear in Spotify; 1429 rows have a non-generic any-credit match; 483 of 17622 Spotify primary artists have a Grammy match. | Name-only matching without a shared artist ID can create false negatives from spelling/credit variants and false positives from homonyms or combined names, changing artist classifications and all KPIs that depend on them. | R1–R3 |
+| Both / artist matching (resolvable rows) | Cross-source: 1,199 of 2,969 resolvable Grammy rows (excluding Various Artists) match a Spotify primary artist: 40.4%. Step rates: {'A. Raw artist text': 1078, 'B. + Unicode normalization': 1117, 'C. + split Featuring credits': 1167, 'D. + Best New Artist nominee rule': 1199}. | Match coverage depends on the resolvable-row denominator, normalization, and credit-splitting rules. Changes can materially shift DQ15 and artist classifications; a text match alone does not prove identity. | R1–R3 |
+| Both / "Various Artists" | Cross-source: 1,199 of 2,969 resolvable Grammy rows match a Spotify primary artist (40.4%), excluding Various Artists. | Using the generic Various Artists label as an artist key can falsely match unrelated compilations and assign Grammy status to artists who were not actually identified. | R1–R3 |
+| Both / time | Temporal: Spotify has no date/year field; Grammy `year` spans 1958–2019; `popularity` is an undated snapshot. | Spotify has no track observation date, so the data cannot establish popularity before or after a Grammy event. Presenting the comparison as historical change or a causal effect would be misleading. | R2 |
+| Both / genre versus category | Cross-source: Spotify has 114 genres; Grammy has 638 raw categories (629 after normalization); no shared ID or directly equivalent vocabulary. | Spotify genres and Grammy award categories have no supported one-to-one mapping. Assuming equivalence would create unsupported cross-source conclusions and misleading genre/category analyses. | R1 |
 
 ### Quality-risk catalogue RK01–RK15
 
@@ -199,84 +151,82 @@ The table below consolidates the detailed row-level findings that support the ri
 | **RK01** | 450 Spotify exact extra copies, 444 groups, 894 implicated rows | Inflated fact counts and double-counted measures | DQ04 warning; TD01 removes exact copies. |
 | **RK02** | One row missing `artists`, `album_name`, and `track_name` | Cannot link a fact row to an artist | DQ05 gate policy; TD02 quarantines as `missing_artist`. |
 | **RK03** | 89,741 distinct track IDs; tracks span multiple genres | `track_id` alone is not a unique listing key | Fact grain is `(track_key, genre_key)`; DQ10 validates prepared grain. |
-| **RK04** | 26.4% rows have multiple artist credits | Expanding all artists could cause fact row explosion | TD03 uses primary artist; preserve `artists_raw`/`n_artists`. |
-| **RK05** | 14.05% popularity zeros | Zero cohort affects distribution and traction analysis | TD06 derives `is_zero_traction`; K5/K6 report it. |
-| **RK06** | Observed p90 popularity is 63 | Static threshold becomes stale if data distribution changes | Recompute p90 for every batch; verify flag consistency with DQ13. |
-| **RK07** | Grammy `winner` is always True | The field cannot distinguish winners | Ignore `winner` for win counting; apply the documented year-based assumption. |
+| **RK04** | 26.4% rows have multiple artist credits | Expanding all artists could cause fact row explosion | TD03 uses primary artist. |
+| **RK05** | 14.05% popularity zeros | Zero cohort affects distribution and traction analysis | TD06 derives `is_zero_traction`. |
+| **RK06** | Observed p90 popularity is 63 | Static threshold becomes stale if data distribution changes | Recompute p90 for every batch, verify flag consistency with DQ13. |
+| **RK07** | Grammy `winner` is always True | The field cannot distinguish winners | Ignore `winner` for win counting, apply the year-based assumption. |
 | **RK08** | 2019 contains 433 rows in 84 categories, 5–8 per category | Treating each as a confirmed win overstates awards | Store `grammy_records_2019` separately and exclude from historical-win count. |
-| **RK09** | `artist` null in 1,840 Grammy records; Best New Artist has a special fallback | Many records cannot be matched from `artist` alone | TD05 uses `nominee` only for Best New Artist with empty `artist`. |
-| **RK10** | 66 Grammy rows use `(Various Artists)` | False positive generic-name match | Exclude the generic marker. |
-| **RK11** | 31 historical `(year, category)` groups have two rows | Award-count interpretation may overcount some co-credits | Treat each source row as an award event under the documented tie/shared-record assumption. |
-| **RK12** | Matching is text-based with no shared artist ID | Homonyms can merge; aliases may fail to link | Record limitation and matching metrics; do not claim perfect entity resolution. |
-| **RK13** | Only a subset of resolvable Grammy records maps to Spotify primary artists | Changing match coverage may affect R1–R3 | DQ15 enforces per-batch match-rate threshold; record denominator/results in batch metadata. |
+| **RK09** | `artist` null in 1,840 Grammy records, Best New Artist has a special fallback | Many records cannot be matched from `artist` alone | TD05 uses `nominee` only for Best New Artist with empty `artist`. |
+| **RK10** | 66 Grammy rows have Various Artists | False positive generic-name match | Exclude the generic marker. |
+| **RK11** | 31 historical `(year, category)` groups have two rows | Award-count interpretation may overcount some co-credits | Treat each source row as a draw for both tracks. |
+| **RK12** | Matching is text-based with no shared artist ID | Homonyms can merge, aliases may fail to link | Record limitation and matching metrics. |
+| **RK13** | Only a subset of resolvable Grammy records maps to Spotify primary artists | Changing match coverage may affect R1–R3 | DQ15 enforces per-batch match-rate threshold. |
 | **RK14** | 720 track IDs have differing popularity across genre listings | Deduplicating by track ID would discard source variation | Preserve track × genre grain. |
 | **RK15** | Normalized artist business key must be unique | Duplicate keys break dimension and foreign-key integrity | DQ12 plus unique constraint on `DIM_ARTIST.artist_key_norm`. |
 
 ## 6. Quality rules and Great Expectations mapping
 
-The implementation defines 15 rules (DQ01–DQ15). Severity is an engineering policy linked to source contracts, profiling risks, analytical requirements, and prepared-data invariants.
-
 ### DQ rules
 
-| Rule | Layer / attributes | Quality dimension and rule | Metric / threshold | Severity | Related requirement / rationale |
-|---|---|---|---|---|---|
-| **DQ01** | Both raw sources: required columns | Validity/structure: all required columns must exist; extra exported index is allowed | Required set present | Critical | Source contract for R1–R3. |
-| **DQ02** | Spotify `track_id`, `track_genre` | Completeness: identifiers and genre are non-null | 100% non-null | Critical | Protects fact grain. |
-| **DQ03** | Spotify `popularity` | Validity: non-null integer in range | 0–100 inclusive | Critical | A negative value is Test B. |
-| **DQ04** | Spotify `(track_id, track_genre)` | Uniqueness: repeated pairs are reported in raw data | No repeats expected; known issue is Warning | Warning | Expected source issue; exact copies are removed in TD01. |
-| **DQ05** | Spotify `artists` | Completeness: artist present for link to Grammy; missing rows are quarantined after raw validation | `mostly=0.99` (at least 99% non-null) | Critical gate with tolerance | Observed single missing-artist row is within the allowed failure proportion; quarantined during transformation. |
-| **DQ06** | Grammy `year`, `category` | Completeness/validity: required fields present; year in observed allowed domain | `year` in 1958–2019, non-null; `category` non-null | Critical | Protects award era/category. |
-| **DQ07** | Grammy whole table | Consistency/completeness: extracted row count equals source import-control count | Difference = 0 | Critical | Proves extraction from MySQL source was reconciled with preparation. |
-| **DQ08** | Grammy `year`, `category` | Consistency: in 1958–2018 each group has at most two rows; 2019 receives special handling | Max group size 2 for historical years; 2019 helper value 1 | Critical | Protects source-grain assumption. |
-| **DQ09** | Prepared datasets | Validity/structure: required columns and types match the model | 100% schema contract | Critical | Applies to prepared fact and dimensions. |
-| **DQ10** | Prepared Spotify fact | Uniqueness: no duplicate track–genre key | 0 duplicate `(track_id, track_genre)` pairs | Critical | One row per listing after transformation. |
-| **DQ11** | Prepared row counts | Completeness/consistency: candidate rows equal raw minus exact copies and quarantine | Difference = 0 | Critical | Baseline: 114,000 − 450 − 1 = 113,549. |
-| **DQ12** | Prepared artist key and reference | Consistency: primary artist key exists and is unique in `DIM_ARTIST` | 100% fact artist key non-null; unique `artist_key_norm` | Critical | Protects artist matching and FK integrity. |
-| **DQ13** | Prepared `popularity`, `is_zero_traction`, `is_top10_global` | Validity/consistency: derived flags agree with popularity and current p90 | 100% coherent | Critical | `is_zero_traction = (popularity == 0)`; top-10 flag = `popularity >= p90`. |
-| **DQ14** | `DIM_ARTIST` Grammy attributes | Validity/consistency: status, wins band, record flag, counts, and derived status agree | Allowed enum values and coherent values | Critical | Protects R1–R3 interpretations. |
-| **DQ15** | Prepared Grammy-to-Spotify match metadata | Consistency/coverage: match rate over resolvable Grammy rows must meet minimum | At least 10% | Critical | Custom Python assertion; uses cross-dataset metadata. |
+| Rule ID | Dataset / Layer | Attribute(s) | Quality Dimension | Quality Rule | Metric/ Threshold | Severity | Related Requirement(s) |
+|---|---|---|---|---|---|---|---|
+| DQ01 | Spotify raw, Grammy raw | Spotify: `track_id`, `track_name`, `album_name`, `artists`, `popularity`, `track_genre`. Grammy: `year`, `category`, `nominee`, `artist` | Validity | All required columns must be present in each raw source. | 100% | Critical | R1-R3 |
+| DQ02 | Spotify raw | `track_id`, `track_genre` | Completeness | Values must be non-null | 100% | Critical | R1-R3 |
+| DQ03 | Spotify raw | `popularity` | Validity | Values must be non-null, integers and be between 0 and 100 inclusive. | 100% | Critical | R2, R3 |
+| DQ04 | Spotify raw | `track_id`, `track_genre` | Uniqueness | Each track and genre pair must appear in only one row. | 0 repeated rows | Warning | R1-R3 |
+| DQ05 | Spotify raw | `artists` | Completeness | Values must be non-null; rows without an artist go to quarantine. | >= 99% | Critical | R1-R3 |
+| DQ06 | Grammy raw | `year`, `category` | Completeness / Validity | Values must be non-null, and year must be between 1958 and 2019 inclusive. | 100% | Critical | R1-R3 |
+| DQ07 | Grammy raw | Whole Grammy table | Completeness | The number of extracted rows must equal the number of rows recorded at import. | Difference = 0 | Critical | R1-R3 |
+| DQ08 | Grammy raw | `year`, `category` | Consistency | For records from 1958 to 2018, each year and category pair must have at most 2 rows. | 100% of combinations | Critical | R2 |
+| DQ09 | Prepared | All columns | Validity (structure) | Columns and data types must match the model. | 100% | Critical | R1-R3 |
+| DQ10 | Prepared | `track_id`, `track_genre` | Uniqueness | The fact table key must be unique. | 0 duplicates | Critical | R1-R3 |
+| DQ11 | Prepared | Row counts | Completeness / Consistency | Prepared rows must equal raw rows minus exact copies minus quarantined rows. | Difference = 0 | Critical | R1-R3 |
+| DQ12 | Prepared | `artist_key_norm` | Consistency | The primary artist must be present and exist in DIM_ARTIST. | 100% | Critical | R1-R3 |
+| DQ13 | Prepared | `popularity`, `is_zero_traction`, `is_top10_global` | Validity | Flags must be consistent with popularity and use a single threshold. | 100% | Critical | R2, R3 |
+| DQ14 | Prepared | `grammy_status`, `grammy_wins_1958_2018`, `grammy_records_2019`, `has_grammy_record`, `wins_band` | Validity | Domains and coherence of the Grammy attributes must hold. | 100% | Critical | R1-R3 |
+| DQ15 | Prepared | Grammy to Spotify matching | Consistency | Resolvable Grammy rows must be matched to a primary Spotify artist. | >= 10% | Critical | R1-R3 |
+
 
 ### Great Expectations suite and gate mapping
 
-Great Expectations Core 1.23.1 uses a persistent file-based context under `gx/`. The table below preserves the implemented GX-to-DQ mapping.
 
 | GX ID | DQ rule | Suite / gate | Expectation or check | Target | Severity / notes |
 |---|---|---|---|---|---|
-| GX01 | DQ01 | `spotify_raw` | `ExpectTableColumnsToMatchSet` | Required Spotify columns; extra index allowed | Critical; `exact_match=False`. |
+| GX01 | DQ01 | `spotify_raw` | `ExpectTableColumnsToMatchSet` | Required Spotify columns. | Critical. |
 | GX02 | DQ02 | `spotify_raw` | `ExpectColumnValuesToNotBeNull` | `track_id` | Critical. |
 | GX03 | DQ02 | `spotify_raw` | `ExpectColumnValuesToNotBeNull` | `track_genre` | Critical. |
-| GX04 | DQ03 | `spotify_raw` | `ExpectColumnValuesToBeBetween` | `popularity`, min 0, max 100 | Critical. |
-| GX05 | DQ04 | `spotify_raw` | `ExpectCompoundColumnsToBeUnique` | `track_id`, `track_genre` | Warning; expected raw warning; 894 implicated rows / 450 copies in baseline. |
-| GX06 | DQ05 | `spotify_raw` | `ExpectColumnValuesToNotBeNull` | `artists`, `mostly=0.99` | Critical gate with documented tolerance. |
-| GX07 | DQ01 | `grammy_raw` | `ExpectTableColumnsToMatchSet` | `year`, `category`, `nominee`, `artist` | Critical; extra columns allowed. |
+| GX04 | DQ03 | `spotify_raw` | `ExpectColumnValuesToBeBetween` | `popularity` | Critical. |
+| GX05 | DQ04 | `spotify_raw` | `ExpectCompoundColumnsToBeUnique` | `track_id`, `track_genre` | Warning, expected raw warning: 894 implicated rows, 450 copies in baseline. |
+| GX06 | DQ05 | `spotify_raw` | `ExpectColumnValuesToNotBeNull` | `artists`, `mostly=0.99` | Critical gate with documented tolerance (quarantine). |
+| GX07 | DQ01 | `grammy_raw` | `ExpectTableColumnsToMatchSet` | `year`, `category`, `nominee`, `artist` | Critical. |
 | GX08 | DQ06 | `grammy_raw` | `ExpectColumnValuesToNotBeNull` | `year` | Critical. |
-| GX09 | DQ06 | `grammy_raw` | `ExpectColumnValuesToBeBetween` | `year`, 1958–2019 | Critical. |
+| GX09 | DQ06 | `grammy_raw` | `ExpectColumnValuesToBeBetween` | `year` | Critical. |
 | GX10 | DQ06 | `grammy_raw` | `ExpectColumnValuesToNotBeNull` | `category` | Critical. |
-| GX11 | DQ07 | `grammy_raw` | `ExpectTableRowCountToEqual` | Whole table vs. source import control (baseline 4,810) | Critical. |
-| GX12 | DQ08 | `grammy_raw` | `ExpectColumnValuesToBeBetween` | Helper `dq08_row_count`; historical size 1–2, 2019 special | Critical. |
+| GX11 | DQ07 | `grammy_raw` | `ExpectTableRowCountToEqual` | Whole table vs. source import control. | Critical. |
+| GX12 | DQ08 | `grammy_raw` | `ExpectColumnValuesToBeBetween` | `dq08_row_count`, historical size 1–2, 2019 special | Critical. |
 | GX13 | DQ09 | `prepared_fact` | `ExpectTableColumnsToMatchSet` | Prepared fact schema | Critical. |
-| GX14 | DQ10 | `prepared_fact` | `ExpectCompoundColumnsToBeUnique` | `track_id`, `track_genre` | Critical; zero repeated grain after preparation. |
+| GX14 | DQ10 | `prepared_fact` | `ExpectCompoundColumnsToBeUnique` | `track_id`, `track_genre` | Critical. |
 | GX15 | DQ11 | `prepared_fact` | `ExpectTableRowCountToEqual` | Prepared fact count from reconciliation metadata | Critical. |
 | GX16 | DQ12 | `prepared_fact` | `ExpectColumnValuesToNotBeNull` | `artist_key_norm` | Critical. |
-| GX17 | DQ13 | `prepared_fact` | `ExpectColumnValuesToBeInSet` | Helper `dq13_zero_coherent` = 1 | Critical; zero-traction flag coherence. |
-| GX18 | DQ13 | `prepared_fact` | `ExpectColumnValuesToBeInSet` | Helper `dq13_top10_coherent` = 1 | Critical; top-10 flag coherence. |
+| GX17 | DQ13 | `prepared_fact` | `ExpectColumnValuesToBeInSet` | `dq13_zero_coherent` = 1 | Critical, zero-traction flag coherence. |
+| GX18 | DQ13 | `prepared_fact` | `ExpectColumnValuesToBeInSet` | `dq13_top10_coherent` | Critical, top-10 flag coherence. |
 | GX19 | DQ12 | `prepared_dim_artist` | `ExpectColumnValuesToBeUnique` | `artist_key_norm` | Critical. |
-| GX20 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `grammy_status` | Critical; allowed status domain. |
-| GX21 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `wins_band` | Critical; `none`, `1`, `2-4`, `5-9`, `10+`. |
-| GX22 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `has_grammy_record` | Critical; `{0,1}`. |
-| GX23 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | Helper `dq14_status_coherent` = 1 | Critical; status agrees with counts. |
-| GX24 | DQ15 | Custom prepared check | Python match-rate assertion | `grammy_match_rate_pct` from batch metadata | Critical; match rate >= 10%; not a native GX expectation. |
+| GX20 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `grammy_status` | Critical. |
+| GX21 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `wins_band` | Critical. |
+| GX22 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `has_grammy_record` | Critical. |
+| GX23 | DQ14 | `prepared_dim_artist` | `ExpectColumnValuesToBeInSet` | `dq14_status_coherent` | Critical. |
+| GX24 | DQ15 | Custom prepared check | Python match-rate assertion | `grammy_match_rate_pct` | Critical. |
 
 ## 7. Transformation and integration decisions
 
 | Decision | Rule / fields | Observed before → after | Rationale and exception handling | Analytical impact |
 |---|---|---|---|---|
-| **TD01 Exact-copy removal** | Compare all 20 Spotify data columns, excluding the exported `Unnamed: 0` index / `source_row_id`; retain first copy. | 114,000 → 113,550 rows; 450 extra copies removed. | Duplicates are recorded in metadata; raw source stays unchanged. | Prevents fact row and aggregate inflation. |
-| **TD02 Missing primary artist** | Quarantine null/empty `artists`, reason `missing_artist`. | 113,550 after deduplication → 113,549 fact candidates; one row quarantined. | That row also lacks `track_name` and `album_name`; `artists` is the criterion because it cannot be linked to the artist dimension. Quarantine Parquet is written under the batch work directory and loaded to `quarantine_spotify`. | Keeps FK chain valid while retaining an audit record. |
+| **TD01 Exact-copy removal** | Compare all 20 Spotify data columns, excluding the exported `Unnamed: 0` index / `source_row_id`, retain first copy. | 114,000 → 113,550 rows, 450 extra copies removed. | Duplicates are recorded in metadata, raw source stays unchanged. | Prevents fact row and aggregate inflation. |
+| **TD02 Missing primary artist** | Quarantine null/empty `artists`, reason `missing_artist`. | 113,550 after deduplication → 113,549 fact candidates; one row quarantined. | That row also lacks `track_name` and `album_name`, `artists` is the criterion because it cannot be linked to the artist dimension. Quarantine Parquet is written under the batch work directory and loaded to `quarantine_spotify`. | Keeps FK chain valid while retaining an audit record. |
 | **TD03 Primary Spotify artist** | Split `artists` on `;`, trim, and use the first token as `primary_artist_name`; preserve full string and count. | Original multi-credit string → `primary_artist_name`, `artists_raw`, `n_artists`. | Null/empty names are removed by TD02. Secondary collaborators are not expanded to separate fact rows. | Consistent artist integration without row explosion. |
-| **TD04 Grammy year counts** | Count rows with `year <= 2018` as historical award records; count 2019 rows separately in `grammy_records_2019`; do not use `winner`. | Raw Grammy rows → per-normalized-artist wins and 2019 record count. | `winner` is constant `True`. The historical-winner interpretation for 1958–2018 and the 2019 nominee-list interpretation are assumptions based on source structure, not externally verified outcomes. Unresolvable artist keys are reported separately. | `grammy_status`, `has_grammy_record`, `wins_band`, and K2–K4 groups. |
-| **TD05 Grammy artist key resolution** | If category is Best New Artist (case-insensitive) and artist is empty, use `nominee`; if artist contains ` Featuring `, use text before it; exclude `(Various Artists)`. | Mixed text/null fields → resolved artist or no key. | Do not split on `&` or `With`: these can occur in legitimate group names. Unresolvable rows remain outside the artist aggregate and are included/excluded from match-rate denominator according to resolvability rules. | Reduces avoidable false matches while keeping limitations visible. |
-| **TD06 Analytical flags** | `is_zero_traction = (popularity == 0)`; `is_top10_global = (popularity >= p90)`. | Raw popularity → two flags and stored batch p90 threshold. | p90 is recomputed each batch and recorded in `etl_control_batch`; baseline p90 is 63. | K3, K5, and K6; DQ13 validates consistency. |
+| **TD04 Grammy year counts** | Count rows with `year <= 2018` as historical award records, count 2019 rows separately in `grammy_records_2019`, `winner` is not used. | Raw Grammy rows → per-normalized-artist wins and 2019 record count. | `winner` is constant `True`. The historical winner interpretation for 1958–2018 and the 2019 nominee-list interpretation are assumptions based on source structure. Unresolvable artist keys are reported separately. | `grammy_status`, `has_grammy_record`, `wins_band`, and K2–K4 groups. |
+| **TD05 Grammy artist key resolution** | If category is Best New Artist and artist is empty, use `nominee`, if artist contains ` Featuring `, use text before it, exclude `(Various Artists)`. | Mixed text/null fields → resolved artist or no key. | `&` or `With` aren't splited on because these can occur in legitimate group names. Unresolvable rows remain outside the artist aggregate are included/excluded from match-rate denominator according to resolvability rules. | Reduces avoidable false matches while keeping limitations visible. |
+| **TD06 Analytical flags** | `is_zero_traction = (popularity == 0)`; `is_top10_global = (popularity >= p90)`. | Raw popularity → two flags and stored batch p90 threshold. | p90 is recomputed each batch and recorded in `etl_control_batch`, baseline p90 is 63. | K3, K5, and K6, DQ13 validates consistency. |
 
 ### Artist integration contract
 
@@ -313,13 +263,11 @@ Editable dimensional diagram: [`docs/star_schema.mmd`](docs/star_schema.mmd). DD
 | `artist_key` | `INT AUTO_INCREMENT` | Primary key | Surrogate key. |
 | `artist_key_norm` | `VARCHAR(150)` | Unique, not null | Normalized artist business key. |
 | `artist_name` | `VARCHAR(150)` | Not null | Display name of the artist. |
-| `grammy_wins_1958_2018` | `SMALLINT` | Not null | Count of Grammy source rows from 1958–2018 under the documented historical-award assumption. |
-| `grammy_records_2019` | `SMALLINT` | Not null | Count of 2019 records; not counted as wins. |
+| `grammy_wins_1958_2018` | `SMALLINT` | Not null | Count of Grammy source rows from 1958–2018. |
+| `grammy_records_2019` | `SMALLINT` | Not null | Count of 2019 records. |
 | `grammy_status` | `VARCHAR(30)` | Not null | `historical winner`, `winner + 2019`, `2019 only`, or `no record`. |
 | `has_grammy_record` | `TINYINT` | Not null | Binary flag indicating an associated Grammy record. |
 | `wins_band` | `VARCHAR(20)` | Not null | `none`, `1`, `2-4`, `5-9`, or `10+`. |
-
-Only primary artists found in Spotify are members of `DIM_ARTIST`; Grammy-only names are recorded for reconciliation but are not standalone dimension members.
 
 ### DIM_GENRE
 
@@ -342,7 +290,7 @@ Only primary artists found in Spotify are members of `DIM_ARTIST`; Grammy-only n
 | `etl_batch_id` | `VARCHAR(40)` | Not null | Batch identifier. |
 | `loaded_at` | `DATETIME` | Not null | UTC load timestamp. |
 
-**Primary key:** `(track_key, genre_key)`. Foreign keys use `ON DELETE RESTRICT ON UPDATE RESTRICT`.
+**Primary key:** `(track_key, genre_key)`.
 
 ### Control and quarantine tables
 
@@ -365,12 +313,6 @@ Only primary artists found in Spotify are members of `DIM_ARTIST`; Grammy-only n
 
 These are observed baseline counts in the included evidence. DQ11 checks row conservation using the current batch metadata.
 
-### Measures and constraints
-
-- Spotify popularity and audio features are not additive; average them at the intended grain rather than summing.
-- The Grammy counts are additive only under the source interpretation described in §16; a group of two historical rows for the same `(year, category)` is treated as two award records by assumption.
-- Every dimension has a surrogate key and unique business key; the fact uses a composite primary key. InnoDB foreign-key constraints and domain checks protect the DW contract.
-
 ## 9. Airflow DAG design
 
 **DAG:** `reliable_music_pipeline`  
@@ -388,54 +330,35 @@ These are observed baseline counts in the included evidence. DQ11 checks row con
 | `validate_prepared` | Validates fact/dimension outputs and custom DQ15 | `transform_and_integrate` | 0 | — |
 | `load_dw` | Transactional DW upsert | Successful `validate_prepared` result required | 2 | 10 seconds |
 
-The two source branches run independently and converge only after both raw validation gates pass. Tasks exchange paths and compact metadata through XCom; large data remains in the mounted batch work directory. Airflow Grid/Graph states and task logs are evidence of orchestration and failure handling.
 
-The ZIP also contains `dags/reliable_pipeline.py` and `dags/reliable_pipeline_demo.py`, earlier/legacy DAG files. The assessed Workshop-2 DAG is `reliable_music_pipeline`; keeping older Python DAGs under the active `dags/` folder can cause Airflow to display extra DAGs.
+- `extract_grammys` and `load_dw` are configured with two retries and a 10-second delay. Their exception handling distinguishes retryable SQLAlchemy `OperationalError` exceptions from other errors that bypass retries.
+- Configuration shows the intended retry behavior, but does not by itself prove that a transient outage recovered successfully. That requires execution logs or a recorded retry test.
+- The two source branches run independently and converge only after both raw validation gates pass. 
+- If a task can't be completed due to a critical failure then the other task that go next after the failure task won't be done.
+- A rerun doesn't duplicate rows, it overwrites them.
 
-## 10. Failure handling and retry policy
+## 10. Failure Handling and Retry Policy
 
-Critical failures block unsafe downstream processing. Warnings are recorded and processing continues only where the documented policy permits it. Retrying a deterministic data/schema error will not fix it.
+Critical data-quality failures block unsafe downstream processing. Warnings are recorded and processing continues only where the documented policy permits it.
 
-| Failure / condition | Severity / type | Expected behavior | Retry policy and reason |
-|---|---|---|---|
-| Spotify CSV missing or unreadable | Operational | `extract_spotify` fails; downstream tasks do not proceed; DW remains unchanged | 0 retries: fix the path/file. |
-| MySQL temporary connection failure in `extract_grammys` | Transient operational | Extraction task may recover on retry | Up to 2 retries, 10 seconds apart. |
-| Required Spotify/Grammy columns missing (DQ01) | Critical contract failure | Affected raw gate fails; dependent transform/load path is blocked | 0 retries; source schema must be repaired. |
-| Popularity outside `[0,100]` (DQ03 / Test B) | Critical quality failure | `validate_spotify_raw` fails; transform, prepared validation, and load are blocked | 0 retries; same input remains invalid. |
-| Grammy extracted-row count differs from import control (DQ07) | Critical consistency failure | `validate_grammys_raw` fails; convergence is blocked | 0 retries; investigate source reconciliation. |
-| Historical Grammy category/year group exceeds allowed count (DQ08) | Critical consistency failure | Grammy raw gate fails | 0 retries; deterministic source-grain violation. |
-| Exact Spotify copies detected (DQ04) | Warning | Warning is recorded; transform removes exact copies; DQ10 verifies prepared uniqueness | No retry required; expected raw characteristic. |
-| One missing-primary-artist row within DQ05 threshold | Quarantine business rule | Row is isolated with `missing_artist`; rest of batch continues | No retry. |
-| Critical prepared validation fails (DQ09–DQ15) | Critical quality failure | `validate_prepared` fails; `load_dw` is blocked | 0 retries. |
-| Temporary MySQL write failure in `load_dw` | Transient operational | Transaction rolls back; load task can retry | Up to 2 retries, 10 seconds apart. |
-| Deterministic FK/constraint failure at load | Deterministic error | Transaction rolls back and task fails | The defect must be corrected; a retry does not repair the data/schema. |
-| Worker stops during a task | Operational interruption | Airflow may rerun the task; keyed upserts and transaction help make rerun safe | Depends on Airflow recovery; do not equate recovery with a successful quality gate. |
+| Condition | Severity / Type | Pipeline Response | Retry? | Justification |
+|---|---|---|---|---|
+| Spotify CSV is missing or unreadable | Operational failure | `extract_spotify` fails. The Spotify validation and downstream tasks do not proceed, so the failed run cannot reach the DW load. | No, 0 retries | The file path or file access must be corrected, repeating the same operation does not resolve a missing or unreadable file. |
+| Temporary MySQL connection failure during `extract_grammys` | Transient operational failure | The task re-raises SQLAlchemy `OperationalError`, allowing Airflow to retry the extraction. Downstream processing waits for successful extraction and validation. | Yes, up to 2 retries, 10 seconds apart | A temporary database connection failure may resolve without changing the data or code. |
+| Non-transient error during Grammy extraction | Deterministic operational/configuration failure | The task raises `AirflowFailException`, and the Grammy branch cannot proceed to raw validation or transformation. | No, automatic retries are bypassed | Missing tables, invalid configuration, or other non-transient errors require correction rather than repetition. |
+| Critical Spotify raw validation failure (DQ01–DQ03 or DQ05 threshold violation) | Critical data-quality failure | `validate_spotify_raw` fails and prevents transformation, prepared validation, and loading. | No, 0 retries | The validation task is configured with `retries=0` due to this DQ being of principal validation (If they trigger is because a file is missing or corrupted). The invalid input or source contract must be corrected. |
+| Critical Grammy raw validation failure (DQ01, DQ06–DQ08) | Critical data-quality/consistency failure | `validate_grammys_raw` fails and blocks the convergence step and downstream processing. | No, 0 retries | Schema, domain, import-count, and historical year–category violations are deterministic and require investigation. DQ07 also requires a valid import-control record. |
+| Repeated Spotify `(track_id, track_genre)` pairs detected (DQ04) | Warning | The raw validation result records the warning and allows processing to continue under the severity policy. TD01 removes exact copies, prepared validation checks fact-key uniqueness through DQ10. | No retry required | DQ04 is explicitly configured as a Warning. Reprocessing the same raw source is unnecessary because the known exact-copy issue is handled during transformation. |
+| Spotify row has no primary artist but DQ05 remains within its 99% completeness threshold | Data-quality exception handled by quarantine | Raw validation can pass. `transform_and_integrate` quarantines the affected row with reason `missing_artist`, while other eligible rows continue. | No, transformation has 0 retries | The row cannot be reliably assigned to an artist. Quarantine preserves the exception without discarding the entire batch. |
+| Deterministic transformation or integration error | Deterministic processing failure | `transform_and_integrate` fails. Prepared validation and loading do not proceed normally. | No, 0 retries | The transformation task is configured with `retries=0`. The underlying input, logic, or configuration must be corrected. |
+| Critical prepared validation failure (DQ09–DQ15), including DQ15 match rate below 10% | Critical data-quality/integration failure | `validate_prepared` fails, and the dependency prevents `load_dw` from running. | No, 0 retries | The prepared validation task is configured with `retries=0`. Unsafe schema, integrity, derived-flag, or matching results must be investigated before loading. |
+| Temporary MySQL operational error during `load_dw` | Transient operational failure | The load transaction is rolled back when the operation fails. SQLAlchemy `OperationalError` is re-raised so Airflow can retry the task. | Yes, up to 2 retries, 10 seconds apart | A transient database or network failure may resolve on another attempt. Transactional loading and keyed upserts support safe reruns. |
+| Deterministic DW load error, such as surrogate-key resolution failure or a constraint violation | Deterministic load failure | The transaction is rolled back and the task raises `AirflowFailException`, bypassing automatic retries. | No, automatic retries are bypassed | Repeating the same invalid load does not repair a missing key, schema defect, or constraint violation. The root cause must be corrected. |
 
-### Retry configuration in the active DAG
-
-| Task | Retries | Rationale |
-|---|---:|---|
-| `extract_spotify` | 0 | Missing/unreadable file is deterministic. |
-| `validate_spotify_raw` | 0 | Validation is deterministic for a given input. |
-| `extract_grammys` | 2, 10 seconds apart | A temporary MySQL connection issue may recover. |
-| `validate_grammys_raw` | 0 | Validation is deterministic. |
-| `transform_and_integrate` | 0 | Deterministic computation/reconciliation for a given input. |
-| `validate_prepared` | 0 | Validation is deterministic. |
-| `load_dw` | 2, 10 seconds apart | Transient DB outage may recover; transaction rollback prevents partial commits. |
-
-The code's retry settings prove the configured policy. To claim a retry was actually observed, retain a real task attempt/log showing it.
 
 ## 11. Test A. successful run
 
 **Objective:** demonstrate that the complete Airflow DAG executes on the original inputs, all critical gates pass, and prepared data is loaded.
-
-1. Prepare the source table and DW as described in §15.
-2. Start the full Compose stack and open `http://localhost:8080`.
-3. Locate `reliable_music_pipeline` and click Trigger DAG.
-4. In Grid or Graph, wait until all seven tasks are `success`.
-5. Open the `load_dw` logs and run `python main.py status` through the `tools` container to verify the DW counts.
-
-**Expected baseline for the archived source:** `grammy_source.grammy_awards=4810`, `FACT_TRACK_GENRE=113549`, `DIM_TRACK=89740`, `DIM_ARTIST=17622`, `DIM_GENRE=114`, and `quarantine_spotify=1`.
 
 ![Test-A](docs/testA_grid.png)
 ![Test-Asuccess](docs/testA_success.png)
@@ -447,28 +370,7 @@ Validation JSONs for a successful batch are written under `data/validation_resul
 
 **Objective:** show that an invalid raw input fails a Critical gate, downstream tasks do not proceed normally, and the DW is not touched by that failed run.
 
-The project includes a controlled test generator that creates `data/test/spotify_popularity_negativa.csv` by adding a row with `popularity = -5` to the Spotify source. This violates DQ03.
-
-Run the generator:
-
-```powershell
-docker compose run --rm tools python main.py make-test-batch
-```
-
-In Airflow, choose **Trigger DAG with config** for `reliable_music_pipeline` and use:
-
-```json
-{
-  "spotify_path": "/opt/airflow/data/test/spotify_popularity_negativa.csv"
-}
-```
-
-**Expected states:**
-
-- `extract_spotify`: `success`.
-- `validate_spotify_raw`: `failed` due to DQ03 / `popularity=-5`.
-- `extract_grammys` and `validate_grammys_raw`: may complete successfully on the independent branch.
-- `transform_and_integrate`, `validate_prepared`, and `load_dw`: `upstream_failed` / blocked because both raw branches are required for convergence and the Spotify gate failed.
+The project includes a csv: `data/test/spotify_popularity_negativa.csv` that has a row with `popularity = -5` in the Spotify source. This violates DQ03.
 
 ![Test-B](docs/testB_grid.png)
 
@@ -476,21 +378,9 @@ In Airflow, choose **Trigger DAG with config** for `reliable_music_pipeline` and
 
 ## 13. Repeatability and safe reruns
 
-The loader uses one SQLAlchemy transaction (`engine.begin()`) and chunked `INSERT ... ON DUPLICATE KEY UPDATE` for dimension, fact, quarantine, and batch-control keys. The composite fact primary key is `(track_key, genre_key)`; `DIM_TRACK.track_id`, `DIM_ARTIST.artist_key_norm`, and `DIM_GENRE.track_genre` are unique business keys; `quarantine_spotify` has a unique `(source_row_id, reason)` key.
+The loader uses one SQLAlchemy transaction (`engine.begin()`) and chunked `INSERT ... ON DUPLICATE KEY UPDATE` for dimension, fact, quarantine, and batch-control keys. The composite fact primary key is `(track_key, genre_key)`; `DIM_TRACK.track_id`, `DIM_ARTIST.artist_key_norm`, and `DIM_GENRE.track_genre` are unique business keys, `quarantine_spotify` has a unique `(source_row_id, reason)` key.
 
-`main.py rerun-check` tests the direct CLI pipeline (it does **not** trigger an Airflow DAG). It snapshots the rows in `FACT_TRACK_GENRE`, `DIM_TRACK`, `DIM_ARTIST`, `DIM_GENRE`, and `quarantine_spotify`, runs the ETL again via the CLI, then compares row counts and order-independent hashes of data columns. It excludes only configured audit fields (`etl_batch_id`, `loaded_at`, and quarantine-specific audit fields) from hashes and checks duplicate business keys. It prints the before/after results and writes `docs/evidence/rerun_check.txt`, including a failure report when the check fails.
-
-Run it after a successful baseline load:
-
-```powershell
-docker compose run --rm tools python main.py rerun-check
-```
-
-**Interpretation required by Workshop-2 §7.3:** compare before/after counts and selected measures, show the relevant keys/constraints and load logic, and explain behavior after a partial/failed run. A new batch updates audit fields, so those are expected to change. The rerun check demonstrates same-input CLI repeatability; a second Airflow DAG Run is a separate piece of orchestration evidence.
-
-> **[EVIDENCE REQUIRED — AIRFLOW RERUN]** To demonstrate repeatability of the Airflow path itself, record DW counts before, trigger the same DAG again from the UI with the normal source, and record counts afterward. Save a second Grid/Graph screenshot and the before/after count output. Do not report that an Airflow rerun passed solely from the CLI `rerun-check`.
-
-Limit: count/hash equality plus uniqueness is strong evidence for the monitored tables and columns, but it does not prove that every possible operational aspect of all future source batches is correct. The loader uses upserts and does not automatically delete stale dimension members merely because a future source no longer contains them; a changing-source deletion policy would require an explicit design.
+`main.py rerun-check` tests the direct CLI pipeline. It snapshots the rows in `FACT_TRACK_GENRE`, `DIM_TRACK`, `DIM_ARTIST`, `DIM_GENRE`, and `quarantine_spotify`, runs the ETL again via the CLI, then compares row counts and order-independent hashes of data columns. It excludes only configured audit fields (`etl_batch_id`, `loaded_at`, and quarantine-specific audit fields) from hashes and checks duplicate business keys. It prints the before/after results and writes `docs/evidence/rerun_check.txt`.
 
 ## 14. KPI views, dashboard, and traceability
 
@@ -498,23 +388,23 @@ Limit: count/hash equality plus uniqueness is strong evidence for the monitored 
 
 | Analytical Requirement | DW Element / Query | KPI / Visualization |
 |---|---|---|
-| **R1. Genre concentration:** Which Spotify genres have a higher share of catalogue listings associated with artists who have a Grammy record? | `dw.VW_KPI_BASE` and `dw.VW_KPI_1_GENRE_CONCENTRATION`; group by `track_genre` and use the artist-level `has_grammy_record` flag. | **K1:** Grammy-record share by genre: `AVG(has_grammy_record) × 100` for track–genre listings in each genre. Visual: sorted horizontal bar chart with genre on the axis and percentage on the value axis; tooltip shows total listings and Grammy-associated listings. A listing is counted in each genre under which its track appears. |
-| **R2. Popularity and historical Grammy recognition:** How does popularity differ between listings associated with artists with historical Grammy records (1958–2018) and those with no record, and how does it vary by award band? | `dw.VW_KPI_2_POPULARITY_COMPARISON`, `dw.VW_KPI_3_TOP10_RATIO`, and `dw.VW_KPI_4_AWARD_BANDS`; uses listing-level `popularity`, artist award status/count, the batch-specific global Top-10% flag, and `wins_band`. | **K2:** mean and median popularity for `with_award` vs. `no_record` (grouped columns). **K3:** Top-10% popularity share for both groups and their ratio (percentage comparison plus ratio card). **K4:** mean and median popularity by award bands `1`, `2–4`, `5–9`, `10+` (line/point chart), with Top-10% share, distinct artists, listing count, and sample-size status in tooltips. Mark small samples; this is descriptive, not causal. |
-| **R3. Zero popularity / zero-traction proxy:** What share of listings has zero popularity among Grammy-record artists compared with the rest, and how does it vary by genre? | `dw.VW_KPI_5_ZERO_TRACTION` and `dw.VW_KPI_6_ZERO_TRACTION_BY_GENRE`; uses `is_zero_traction`, artist Grammy-record status, and `track_genre`. | **K5:** percentage of listings with `popularity = 0` for `artists_with_grammy` vs. `rest_of_catalog` (paired KPI cards or bar chart). **K6:** percentage of zero-popularity listings among Grammy-associated listings by genre (sorted horizontal bar chart), with eligible listing count, zero-popularity count, and sample-size status in the tooltip. Zero popularity is a project-defined proxy; it is not a direct measure of streams or revenue. |
+| **R1. Genre concentration:** In which genres is the presence of artists with a Grammy record concentrated? | `dw.VW_KPI_BASE` and `dw.VW_KPI_1_GENRE_CONCENTRATION`; group by `track_genre` and use the artist-level `has_grammy_record` flag. | **K1:** Grammy-record share by genre: `AVG(has_grammy_record) × 100` for track–genre listings in each genre. Visual: sorted horizontal bar chart with genre on the axis and percentage on the value axis; tooltip shows total listings and Grammy-associated listings. A listing is counted in each genre under which its track appears. |
+| **R2. Popularity and historical Grammy recognition:** Do artists who have won a Grammy (1958–2018) have higher popularity than those who have not, and does it grow with the number of awards? (association, not effect) | `dw.VW_KPI_2_POPULARITY_COMPARISON`, `dw.VW_KPI_3_TOP10_RATIO`, and `dw.VW_KPI_4_AWARD_BANDS`; uses listing-level `popularity`, artist award status/count, the batch-specific global Top-10% flag, and `wins_band`. | **K2:** mean and median popularity for `with_award` vs. `no_record` (grouped columns). **K3:** Top-10% popularity share for both groups and their ratio (percentage comparison plus ratio card). **K4:** mean and median popularity by award bands `1`, `2–4`, `5–9`, `10+` (line/point chart), with Top-10% share, distinct artists, listing count, and sample-size status in tooltips. |
+| **R3. Zero popularity / zero-traction proxy:** What share of the catalog of artists with a Grammy record has zero traction (popularity = 0)? | `dw.VW_KPI_5_ZERO_TRACTION` and `dw.VW_KPI_6_ZERO_TRACTION_BY_GENRE`; uses `is_zero_traction`, artist Grammy-record status, and `track_genre`. | **K5:** percentage of listings with `popularity = 0` for `artists_with_grammy` vs. `rest_of_catalog` (paired KPI cards and bar chart). **K6:** percentage of zero-popularity listings among Grammy-associated listings by genre (sorted horizontal bar chart), with eligible listing count, zero-popularity count, and sample-size status in the tooltip. |
 
 ### End-to-end traceability matrix
 
 | Requirement | Required data | Main quality risk | DQ rule / GX expectation | Transformation | DW element | KPI / visualization |
 |---|---|---|---|---|---|---|
-| R1–R3: required source columns | Spotify `track_id`, `track_name`, `album_name`, `artists`, `popularity`, `track_genre`; Grammy `year`, `category`, `nominee`, `artist` | Source schema changes / missing artist (RK02) | DQ01; GX01 and GX07 | Validate raw source before transformation; TD02 handles missing artist after gate | All prepared tables depend on source contract | K1–K6 use trusted DW data. |
-| R1–R3: remove exact copies | Spotify's 20 data columns | RK01, 450 exact copies | DQ04 warning / GX05; DQ10 critical / GX14 | TD01, retain first copy | `FACT_TRACK_GENRE` composite key | K1–K6 avoid duplicate listing counts. |
-| R1–R3: rows without artist | Spotify `artists` | RK02 | DQ05 / GX06 | TD02 quarantines row as `missing_artist` | `quarantine_spotify`; row excluded from fact | Preserves valid artist foreign key. |
-| R2/R3: valid popularity | Spotify `popularity` | RK05/RK06; controlled `-5` case | DQ03 / GX04 | TD06 is only applied after raw gate passes | `FACT_TRACK_GENRE.popularity`, flags | K2/K3/K4/K5/K6. |
-| R2: interpret Grammy years | Grammy `year`, `winner` | RK07/RK08/RK11 | DQ08 / GX12 | TD04 stores historical rows and 2019 records separately | `DIM_ARTIST.grammy_wins_1958_2018`, `grammy_records_2019`, `grammy_status` | K2–K4. |
-| R1–R3: normalized artist matching | Spotify primary artist and Grammy `artist`/limited `nominee` fallback | RK09/RK10/RK12/RK13 | DQ12/GX16/GX19; DQ14/GX20–GX23; DQ15/GX24 | TD03/TD05; normalize and aggregate Grammy by key before join | `DIM_ARTIST.has_grammy_record`, status and batch match metadata | K1–K6. |
-| R2/R3: coherent flags | Spotify popularity and batch p90 | RK05/RK06/RK14 | DQ13 / GX17–GX18 | TD06 derives both flags from popularity | `FACT_TRACK_GENRE.is_top10_global`, `.is_zero_traction`; `etl_control_batch.p90_popularity_threshold` | K3–K6. |
-| R1–R3: row conservation | Raw rows, copies removed, quarantine count | RK01/RK02 | DQ11 / GX15 | TD01 + TD02 and reconciliation assertion | Fact count equals candidate count 113,549 in baseline | Ensures KPIs use reconciled data. |
-| R1: primary artist is valid | `artist_key_norm` and dimension keys | RK04/RK15 | DQ12 / GX16 and GX19 | TD03 normalizes primary artist and builds unique artist dimension | FK `FACT_TRACK_GENRE.artist_key` → `DIM_ARTIST.artist_key` | K1 and all artist-aware outputs. |
+| R1–R3 | Spotify `track_id`, `track_name`, `album_name`, `artists`, `popularity`, `track_genre`; Grammy `year`, `category`, `nominee`, `artist` | Source schema changes / missing artist (RK02) | DQ01, GX01 and GX07 | Validate raw source before transformation, TD02 handles missing artist after gate | All prepared tables depend on source contract | K1–K6 use trusted DW data. |
+| R1–R3 | Spotify's 20 data columns | RK01, 450 exact copies | DQ04 warning / GX05; DQ10 critical / GX14 | TD01, retain first copy | `FACT_TRACK_GENRE` composite key | K1–K6 avoid duplicate listing counts. |
+| R1–R3 | Spotify `artists` | RK02 | DQ05 / GX06 | TD02 quarantines row as `missing_artist` | `quarantine_spotify`; row excluded from fact | Preserves valid artist foreign key. |
+| R2,R3 | Spotify `popularity` | RK05/RK06; controlled `-5` case | DQ03 / GX04 | TD06 is only applied after raw gate passes | `FACT_TRACK_GENRE.popularity`, flags | K2: grouped columns comparing mean and median popularity by group. K3: Top-10% share comparison plus ratio card. K4: mean/median popularity by win band. K5: zero-popularity comparison by segment. K6: zero-popularity share by genre. |
+| R2 | Grammy `year`, `winner` | RK07/RK08/RK11 | DQ08 / GX12 | TD04 stores historical rows and 2019 records separately | `DIM_ARTIST.grammy_wins_1958_2018`, `grammy_records_2019`, `grammy_status` | K2: grouped columns comparing with_award and no_record. K3: Top-10% share comparison and ratio card. K4: mean/median popularity by ordered win band (1, 2–4, 5–9, 10+), with sample-size status in the tooltip. |
+| R1–R3 | Spotify primary artist and Grammy `artist`/limited `nominee` fallback | RK09/RK10/RK12/RK13 | DQ12/GX16/GX19; DQ14/GX20–GX23; DQ15/GX24 | TD03/TD05; normalize and aggregate Grammy by key before join | `DIM_ARTIST.has_grammy_record`, status and batch match metadata | K1: Grammy-associated listing share by genre (sorted horizontal bars). K2–K4: popularity by recognition status and win band. K5–K6: zero-popularity shares by segment and genre. |
+| R2-R3 | Spotify popularity and batch p90 | RK05/RK06/RK14 | DQ13 / GX17–GX18 | TD06 derives both flags from popularity | `FACT_TRACK_GENRE.is_top10_global`, `.is_zero_traction`; `etl_control_batch.p90_popularity_threshold` | K3: Top-10% share comparison and ratio card. K4: popularity by win band with Top-10% share in tooltips. K5: zero-popularity share by segment. K6: zero-popularity share by genre. |
+| R1–R3 | Raw rows, copies removed, quarantine count | RK01/RK02 | DQ11 / GX15 | TD01 + TD02 and reconciliation assertion | Fact count equals candidate count 113,549 in baseline | Ensures KPIs use reconciled data. |
+| R1 | `artist_key_norm` and dimension keys | RK04/RK15 | DQ12 / GX16 and GX19 | TD03 normalizes primary artist and builds unique artist dimension | FK `FACT_TRACK_GENRE.artist_key` → `DIM_ARTIST.artist_key` | K1 and all artist-aware outputs. |
 
 ### Dashboard
 
@@ -532,36 +422,42 @@ Limit: count/hash equality plus uniqueness is strong evidence for the monitored 
 
 ## 15. Setup and execution guide
 
+```powershell
+docker compose run --rm tools python main.py rerun-check
+```
+
+```json
+{
+  "spotify_path": "/opt/airflow/data/test/spotify_popularity_negativa.csv"
+}
+```
+
 ### Prerequisites
 
 - Docker Desktop running with at least 4 GB of RAM available to Docker.
-- Git and Windows CMD or PowerShell (commands below use PowerShell where indicated).
+- Git and Windows CMD or PowerShell (commands below use PowerShell).
 - Host ports `8080` (Airflow UI) and `3307` (MySQL) available.
 - Source files present: `data/raw/spotify_dataset.csv` and `data/raw/the_grammy_awards.csv`.
-- Power BI Desktop plus MySQL Connector/NET if using the dashboard.
-- Python on the host only if running notebooks locally; ETL dependencies run in the Docker image.
+- Python on the host only if running notebooks locally, ETL dependencies run in the Docker image.
 
 ### Configure the environment
 
-Copy `.env.example` to `.env` and edit local settings if needed. Never commit `.env` or real credentials. Verify that `.env` is ignored by Git and excluded from the release ZIP.
+The project provides preconfigured local credentials, so changing them is not necessary for the workshop to work and leaving them as they are is the most recommended step because the default usernames, passwords, database names, and connection settings are coordinated across the Docker Compose configuration, MySQL initialization script, and Python application, stil for good pracitce the .env is not submitted to the repository, so the command below is necessary to be executed.
 
 ```powershell
-Copy-Item .env.example .env
-notepad .env
-docker compose config --quiet
+copy .env.example .env
 ```
 
-### Initial setup (new database volume / clean environment)
+### Initial setup
 
 Build the image, start MySQL, and wait for its health check:
 
 ```powershell
 docker compose build
-docker compose up -d mysql
 docker compose ps
 ```
 
-Prepare the Grammy source and create the Data Warehouse schema/views:
+Prepare the Grammy source and create the Data Warehouse and also the views:
 
 ```powershell
 docker compose run --rm tools python main.py prepare-source
