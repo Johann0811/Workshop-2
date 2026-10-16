@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "26170aa6-adce-43f2-9092-7ede3ef88a07",
+      "id": "405e4ca9-b4a3-4706-b7e5-f8492a2d29f9",
       "kwargs": {
         "column_set": [
           "track_id",
@@ -19,7 +19,7 @@
       "type": "expect_table_columns_to_match_set"
     },
     {
-      "id": "08acd8b1-971e-4281-8687-6bcdbfe8cc47",
+      "id": "d219ba9f-40cf-46a7-a946-3c9eee42a22d",
       "kwargs": {
         "column": "track_id"
       },
@@ -31,7 +31,7 @@
       "type": "expect_column_values_to_be_unique"
     },
     {
-      "id": "908bf2d0-f486-47bb-88d4-98b12a1cbe30",
+      "id": "85bee7fc-a089-4674-8da4-d094772d69f5",
       "kwargs": {
         "column": "track_id"
       },
@@ -43,7 +43,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "25fb1068-bdd7-4345-a0dd-472f8421eb7f",
+      "id": "f252084c-b8be-4961-badd-99a88e91f57e",
       "kwargs": {
         "column": "n_artists",
         "type_": "int8"

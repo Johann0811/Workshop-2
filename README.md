@@ -422,16 +422,6 @@ The loader uses one SQLAlchemy transaction (`engine.begin()`) and chunked `INSER
 
 ## 15. Setup and execution guide
 
-```powershell
-docker compose run --rm tools python main.py rerun-check
-```
-
-```json
-{
-  "spotify_path": "/opt/airflow/data/test/spotify_popularity_negativa.csv"
-}
-```
-
 ### Prerequisites
 
 - Docker Desktop running with at least 4 GB of RAM available to Docker.
@@ -454,88 +444,62 @@ Build the image, start MySQL, and wait for its health check:
 
 ```powershell
 docker compose build
-docker compose ps
-```
-
-Prepare the Grammy source and create the Data Warehouse and also the views:
-
-```powershell
-docker compose run --rm tools python main.py prepare-source
-docker compose run --rm tools python main.py create-dw
-docker compose run --rm tools python main.py create-kpi-views
-```
-
-`prepare-source` truncates and reloads `grammy_source.grammy_awards` from the original Grammy CSV. It is an initial/source-reload step, not something to run automatically before every ETL run. `create-dw` creates the DW tables if missing; `reset-dw` is destructive and should only be used when intentionally resetting the target.
-
-Optionally run tests:
-
-```powershell
-docker compose run --rm tools pytest tests/ -v
-```
-
-### Start Airflow and verify the environment
-
-```powershell
 docker compose up -d
 docker compose ps
-docker compose run --rm tools airflow version
 ```
 
-Expected Airflow version: `3.1.8`. Open `http://localhost:8080` and use the local credentials configured for Airflow in `.env`. Do not assume they match MySQL or BI credentials.
-
-### Test A — execute through Airflow
-
-1. Find and unpause `reliable_music_pipeline` in the Airflow UI.
-2. Click **Trigger DAG**.
-3. Confirm all seven tasks reach `success` in Grid/Graph.
-4. Open `load_dw` logs and run status:
+Enter the container with this command
 
 ```powershell
-docker compose run --rm tools python main.py status
+docker compose run --rm tools bash
+```
+create the data source and data warehouse to preapre everything.
+
+```
+python main.py prepare-source
+python main.py create-dw
 ```
 
-Save the screenshots described in §11.
+Expected Airflow version: `3.1.8`. Open `http://localhost:8080` and use the local credentials configured for Airflow in `.env`.
+
+### Test A. execute through Airflow
+
+1. Find `reliable_music_pipeline` in the Airflow UI dags section.
+2. Click **Trigger DAG**.
+3. Confirm all seven tasks reach `success` in Grid/Graph.
+4. run status to see all the rows that loaded (only shows if it is loaded correctly):
+
+```powershell
+ python main.py status
+```
+
+docker compose run --rm tools 
 
 ### Create KPI views and cross-check
 
 After the DW schema and a successful load:
 
 ```powershell
-docker compose run --rm tools python main.py create-kpi-views
-docker compose run --rm tools python main.py kpi-crosscheck
+python main.py create-kpi-views
+python main.py kpi-crosscheck
 ```
 
-The cross-check calculates K1–K6 from DW tables with pandas, compares them with the MySQL views, and writes `docs/evidence/kpi_crosscheck_report.json` plus K4/K6 sample-alert CSVs. This command is separate from the DAG. The report is evidence for the execution timestamp it contains; regenerate it after changes to source, transformation, schema, or KPI SQL.
+The cross-check calculates K1–K6 from DW tables with pandas, compares them with the MySQL views, and writes `docs/evidence/kpi_crosscheck_report.json` plus K4/K6 sample-alert CSVs. This command is separate from the DAG. 
 
 ### Direct CLI pipeline (not an Airflow DAG Run)
 
-The CLI path is useful for debugging and direct repeatability checks. It uses the shared stage functions, validates raw and prepared data, and only loads after the validation result permits it:
+running with this command from console would uss the shared stage functions, validates raw and prepared data, and only loads after the validation result permits it, but it doesn't run the dag from airflow:
 
 ```powershell
-docker compose run --rm tools python main.py run-pipeline
-docker compose run --rm tools python main.py status
+tools python main.py run-pipeline
+python main.py status
 ```
 
-`run-pipeline` does not create Airflow task states in Grid/Graph. Use the Airflow UI for the assessed orchestration evidence. Other useful commands are:
+If you don't want to open the interactive container shell you can run all these commands but adding at the start `docker compose run --rm tools` and then you put the command
 
-| Command | Purpose |
-|---|---|
-| `prepare-source` | Load/reconcile Grammy CSV into the operational source table; replaces the source-table contents. |
-| `create-dw` | Create the dimensional and control tables. |
-| `reset-dw` | Drop/recreate DW tables; destroys current DW data but not Grammy source or Airflow metadata. |
-| `create-kpi-views` | Create/replace SQL KPI views. |
-| `kpi-crosscheck` | Compare pandas KPI calculations from DW tables to SQL views. |
-| `make-test-batch` | Create `data/test/spotify_popularity_negativa.csv` with a synthetic `popularity=-5` row. |
-| `rerun-check` | Re-run the direct CLI ETL and compare before/after row counts, data hashes, and business-key uniqueness. |
-| `status` | Display Grammy source and DW row counts/status. |
-| `extract`, `validate-raw`, `transform`, `validate-prepared`, `load` | Execute individual CLI stages for debugging. `load` requires a successful prepared-validation result for the batch. |
+### Test B. controlled failure from Airflow
 
-An interactive shell can be opened with `docker compose run --rm tools bash`. `--rm` removes that temporary `tools` container when you exit; it does not remove the persistent MySQL volume or source CSVs.
-
-### Test B — controlled failure from Airflow
-
-1. Create the bad input with `make-test-batch`.
-2. In Airflow, select **Trigger DAG with config** and pass:
+1. In Airflow, go to the dag section in dags and click on the Trigger button and there would show a path under Run parameters, to run the controlled failure you must change that path listed there to this one:
 
 ```json
 {
@@ -543,22 +507,15 @@ An interactive shell can be opened with `docker compose run --rm tools bash`. `-
 }
 ```
 
-3. Verify `extract_spotify=success`, `validate_spotify_raw=failed`, `extract_grammys`/`validate_grammys_raw` independently complete if their source is healthy, and `transform_and_integrate`, `validate_prepared`, and `load_dw` are blocked/upstream-failed.
-4. Compare DW status before and after; save the screenshots and failure log described in §12.
-
 ### Notebook profiling
 
-For the raw CSV initial profile, install the separate notebook requirements in a local Python virtual environment:
+if you want to run the notebook of initial profiling you need to install the separate notebook requirements in a local Python virtual environment:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 python -m pip install -r requirementsnotebook.txt
-jupyter lab notebooks/initial_profiling.ipynb
 ```
-
-That notebook reads the two CSVs independently and does not need MySQL. The detailed `notebooks/data_profiling.ipynb` uses the prepared Grammy source by default; start MySQL and run `prepare-source` before executing its database-connected Grammy cells.
 
 ### Reset and teardown
 
@@ -570,40 +527,36 @@ docker compose down
 docker compose down -v
 ```
 
-`docker compose down -v` removes database volumes; the source CSV files in `data/raw/` remain local, but the MySQL source table, DW contents, and Airflow metadata must be recreated/reinitialized.
-
 ## 16. Assumptions and limitations
 
 ### Grammy interpretation
 
 - **2019 records are treated as a nominee list / no known outcome.** There are 433 rows over 84 categories (5–8 rows per category), while `winner` is `True` throughout all years. Real 2019 winners cannot be derived from the supplied data without external information.
 - **1958–2018 rows are treated as historical award events.** There are 4,315 `(year, category)` pairs with one row and 31 with two rows. The two-row groups are treated as ties/shared awards, but this is an inference from the data, not externally verified for every case (for example, separate credited contributors).
-- **Lead-artist Featuring rule:** if `artist` contains ` Featuring ` (case-insensitive), only the text before it is used as the key. Do not split on `&` or `With`, since these connectors can be part of a legitimate group name.
-- The `winner` column is not used to determine awards because it has zero variance.
+- **Lead-artist Featuring rule:** if `artist` contains ` Featuring `, only the text before it is used as the key. it does not split on `&` or `With`, since these connectors can be part of a legitimate group name.
+- The `winner` column is not used to determine awards because it has zero variance and is True in every single row.
 
 ### Matching and normalization
 
-- The sources have no shared artist ID. Homonyms can collapse into one normalized key, while aliases may fail to match; neither issue can be reliably solved without identity data.
+- The sources have no shared artist ID. Homonyms can collapse into one normalized key, while aliases may fail to match.
 - The exploratory profile's row-match rate and distinct matched-artist count use different denominators. The ETL's per-batch match metadata is the authoritative metric for DQ15 on a run.
 - Grammy-only artists are not added as standalone `DIM_ARTIST` rows because the dimension is built from Spotify primary artists. Unmatched Grammy records are retained in source/metadata reconciliation counts.
-- The Best New Artist `nominee` fallback is intentionally narrow; `nominee` can represent a song/work in other categories.
+- The Best New Artist `nominee` fallback is intentionally narrow, `nominee` can represent a song/work in other categories.
 
 ### Spotify and analytical semantics
 
 - The exact-copy check compares all 20 data columns except the exported index; if the raw schema changes, this rule should be reviewed.
-- Only missing/empty primary artist rows are quarantined as `missing_artist`; the observed row also lacks track and album names.
+- Only missing/empty primary artist rows are quarantined as `missing_artist`, the observed row also lacks track and album names.
 - p90 is recomputed for each batch. The observed value 63 belongs to the profiled snapshot and may change when the popularity distribution changes.
-- `popularity = 0` is used as a zero-traction proxy; it is not the number of plays or revenue.
+- `popularity = 0` is used as a zero-traction proxy, it is not the number of plays or revenue.
 - Genre comparisons rely on a provided dataset with exactly 1,000 raw rows per genre. Row totals should not be interpreted as natural-market genre size.
 - Secondary Spotify collaborators are not counted as separate artist links in the fact table (approximately 1.2% of observed collaborator credits had a secondary collaborator with a Grammy record in profiling).
 - The current requirements do not include release-date analysis, song-level Grammy linking, audio-feature comparisons, or external genre/category mapping.
 
 ### Implementation and deployment
 
-- The project runs on a single Docker host using Airflow LocalExecutor; this is a batch pipeline, not streaming ingestion.
+- The project runs on a single Docker host using Airflow LocalExecutor.
 - Airflow 3.1.8 and MySQL 8.0 are used. The configuration includes `SQL_ENGINE_COLLATION_FOR_IDS=utf8mb3_bin` to avoid Airflow internal ID index-length issues in the selected MySQL setup.
-- The MySQL service is configured with local infile disabled; data loading uses Python/SQLAlchemy/PyMySQL chunked inserts, not `LOAD DATA`.
-- `.env` contains local development configuration and must not be committed or included in the distributable archive. `.env.example` is the template; these credentials are not production credentials.
 
 
 ## 17. Repository structure
