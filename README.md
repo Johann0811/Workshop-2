@@ -562,39 +562,80 @@ docker compose down -v
 ## 17. Repository structure
 
 ```text
-workshop-2/
+actividadetl/
+├── config/
+│   └── airflow.cfg
 ├── dags/
-│   ├── reliable_music_pipeline.py       # Active Workshop-2 
+│   └── reliable_music_pipeline.py
 ├── data/
 │   ├── raw/
 │   │   ├── spotify_dataset.csv
 │   │   └── the_grammy_awards.csv
-│   ├── test/                            # Controlled DQ03 input
-│   ├── work/                            # Per-batch Parquet files (runtime)
-│   ├── validation_results/              # GX JSON by batch (runtime)
-│   └── output/                          # KPI cross-check reports/alert CSVs
+│   ├── test/
+│   │   └── spotify_popularity_negativa.csv
+│   ├── output/
+│   │   ├── k4_sample_alerts.csv
+│   │   ├── k6_sample_alerts.csv
+│   │   └── kpi_crosscheck_report.json
+│   ├── work/                         # Batch Parquet and metadata, runtime, Git-ignored
+│   └── validation_results/           # Great Expectations JSON reports, runtime, Git-ignored
+├── docker/
+│   └── mysql-init/
+│       └── 01_init_databases.sql
 ├── docs/
-│   ├── evidence/                        # Evidence text/JSON/CSV/figures and screenshot placeholders
-│   └── pipeline_architecture.mmd        # Editable pipeline 
-├── gx/                                  # GX context and suites
+│   ├── evidence/                      # Validation, cross-check and rerun evidence
+│   ├── Dashboard and Graphics Workshop-2.pbix
+│   ├── Dashboard.png
+│   ├── graph1.png
+│   ├── graph2.png
+│   ├── graph3.png
+│   ├── graph4.png
+│   ├── graph5.png
+│   ├── star_schema.mmd
+│   ├── star_schema.png
+│   ├── testA_grid.png
+│   ├── testA_success.png
+│   ├── testB_fail.png
+│   └── testB_grid.png
+├── gx/
+│   ├── checkpoints/
+│   ├── expectations/
+│   ├── plugins/
+│   ├── validation_definitions/
+│   ├── uncommitted/                   # GX runtime artifacts, Git-ignored
+│   └── great_expectations.yml
 ├── notebooks/
-│   ├── initial_profiling.ipynb           # Initial raw CSV 
-│   ├── data_profiling.ipynb              # Detailed
-│   └── data_profiling_exec.ipynb         # Executed copy
+│   ├── data_profiling.ipynb
+│   └── initial_profiling.ipynb
+├── plugins/                           
+├── scripts/
+│   └── run_notebook.py
 ├── sql/
 │   ├── source_setup.sql
 │   ├── dw_schema.sql
 │   └── kpi_queries.sql
-├── src/                                  # Shared extraction, transform, validation, load, KPI modules
+├── src/
+│   ├── __init__.py
+│   ├── extract.py
+│   ├── kpis.py
+│   ├── load.py
+│   ├── transform.py
+│   └── validation.py
 ├── tests/
-│   └── spotify_popularity_negativa.csv
-│   
-├── docker-compose.yaml
+│   ├── test_flags.py
+│   ├── test_integration_controls.py
+│   ├── test_normalization.py
+│   ├── test_reconciliation.py
+│   └── test_status_bands.py
+├── logs/                              # Airflow logs; runtime, Git-ignored
+├── .env.example
+├── .gitignore
 ├── Dockerfile
+├── docker-compose.yaml
 ├── main.py
+├── pytest.ini
 ├── requirements.txt
 ├── requirementsnotebook.txt
-├── .env.example
 └── README.md
 ```
 
