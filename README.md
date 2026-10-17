@@ -516,7 +516,7 @@ This would rerun the pipeline but with the same parameters than the previous run
 
 ### Notebook profiling
 
-if you want to run the notebook of initial profiling you need to install the separate notebook requirements in a local Python virtual environment:
+if you want to run the notebook of initial profiling you need to install the separate notebook requirements in a local Python virtual environment (outside of the docker container):
 
 ```powershell
 python -m venv .venv
