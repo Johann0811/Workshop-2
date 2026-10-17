@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "730bcebb-3220-4cc1-b514-de318abf5c79",
+      "id": "fa0585ed-be8d-4fe7-b9b9-7c776596e7c0",
       "kwargs": {
         "column_set": [
           "track_id",
@@ -24,7 +24,7 @@
       "type": "expect_table_columns_to_match_set"
     },
     {
-      "id": "89384589-a607-49c3-9421-e649535e0311",
+      "id": "7ea744ce-d51d-4ee1-9acf-373c3c637796",
       "kwargs": {
         "column": "popularity",
         "type_": "int64"
@@ -37,7 +37,7 @@
       "type": "expect_column_values_to_be_of_type"
     },
     {
-      "id": "1b24ea94-f84e-4de2-b227-411f1ffb4276",
+      "id": "154a73db-5470-4341-9cea-f0906bc35e70",
       "kwargs": {
         "column": "is_top10_global",
         "type_": "int8"
@@ -50,7 +50,7 @@
       "type": "expect_column_values_to_be_of_type"
     },
     {
-      "id": "15678788-5f90-4f60-90ed-a32f6373a62a",
+      "id": "0d6c437f-9b30-4aa0-98f9-abf1852a4886",
       "kwargs": {
         "column": "is_zero_traction",
         "type_": "int8"
@@ -63,7 +63,7 @@
       "type": "expect_column_values_to_be_of_type"
     },
     {
-      "id": "52eb4db0-f4f6-49b4-b222-d6037ce150b5",
+      "id": "2940d4b1-a0be-49e6-8fc5-14b1008a3c35",
       "kwargs": {
         "column_list": [
           "track_id",
@@ -78,9 +78,9 @@
       "type": "expect_compound_columns_to_be_unique"
     },
     {
-      "id": "7ab43cbb-a93b-4673-880a-d73e920ec668",
+      "id": "2ad3703f-2735-4627-8fb6-d06c932fc61d",
       "kwargs": {
-        "value": 2
+        "value": 113549
       },
       "meta": {
         "rule_id": "DQ11",
@@ -90,7 +90,7 @@
       "type": "expect_table_row_count_to_equal"
     },
     {
-      "id": "b60b5d25-4022-485a-8ca8-0d6d342ad98e",
+      "id": "75ff9d05-35e7-48b8-a28f-ce667d2795be",
       "kwargs": {
         "column": "artist_key_norm"
       },
@@ -102,7 +102,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "9c9f3089-031b-4a67-8c38-86d483e393a9",
+      "id": "073bc091-340e-4b35-b02b-435ad7355357",
       "kwargs": {
         "column": "dq12_artist_in_dim",
         "value_set": [
@@ -117,7 +117,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "d21991f1-c5b6-4d32-9dca-52f34217b928",
+      "id": "6f10ed5c-5cb1-4989-9c82-fb5c9e75b8b6",
       "kwargs": {
         "column": "dq13_zero_coherent",
         "value_set": [
@@ -132,7 +132,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "3b40ddfe-bf91-452c-9fb5-5910ea33bc4e",
+      "id": "f605b658-1ac0-429e-80f0-dffe13d82b6e",
       "kwargs": {
         "column": "dq13_top10_coherent",
         "value_set": [

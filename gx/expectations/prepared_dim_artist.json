@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "0d6bbac7-7f8f-4374-a599-db3e08f4ab2c",
+      "id": "09e686ca-99d2-45aa-a019-08a1c69de138",
       "kwargs": {
         "column_set": [
           "artist_key_norm",
@@ -22,7 +22,7 @@
       "type": "expect_table_columns_to_match_set"
     },
     {
-      "id": "7affd623-b835-4ad6-95ef-b2262b5dd138",
+      "id": "d09dfacd-e868-4cac-b25e-d31ad2514883",
       "kwargs": {
         "column": "grammy_wins_1958_2018",
         "type_": "int16"
@@ -35,7 +35,7 @@
       "type": "expect_column_values_to_be_of_type"
     },
     {
-      "id": "ac3c2c27-9b66-4af9-aac9-f74d6978b3e8",
+      "id": "e0dd5749-8b27-4dcc-86d1-190ed8172bd7",
       "kwargs": {
         "column": "has_grammy_record",
         "type_": "int8"
@@ -48,7 +48,7 @@
       "type": "expect_column_values_to_be_of_type"
     },
     {
-      "id": "5a7987f8-e07b-4b9e-8b1a-4e64355da528",
+      "id": "dcc93972-1c3c-43e4-9b8f-e461e7a14a03",
       "kwargs": {
         "column": "artist_key_norm"
       },
@@ -60,7 +60,7 @@
       "type": "expect_column_values_to_be_unique"
     },
     {
-      "id": "a2b89a8d-7a0b-44e6-b89b-caca24c2d71b",
+      "id": "c94edc0d-b5db-4938-83df-9cce66f63ca3",
       "kwargs": {
         "column": "grammy_status",
         "value_set": [
@@ -78,7 +78,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "a50cfb7d-43fc-4cc5-9082-2db58ca33f99",
+      "id": "9ee065f9-479a-40be-9de6-950580a396ea",
       "kwargs": {
         "column": "wins_band",
         "value_set": [
@@ -97,7 +97,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "89a7d141-2039-4c2e-9d87-e2d445fd7354",
+      "id": "718f27da-5931-454b-bd6e-4f3673a1768f",
       "kwargs": {
         "column": "has_grammy_record",
         "value_set": [
@@ -113,7 +113,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "cf75cac3-6fed-4a4e-a447-86b10897e0ac",
+      "id": "9c9ce91a-e574-4148-83e6-2c8472352589",
       "kwargs": {
         "column": "dq14_status_coherent",
         "value_set": [
@@ -128,7 +128,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "36949cfc-e161-40fd-99ff-439dc60dd664",
+      "id": "d42acdf8-a4b2-4125-88d8-991f94eb2e99",
       "kwargs": {
         "column": "dq14_band_coherent",
         "value_set": [
@@ -143,7 +143,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "d7cb7db2-8aa9-401c-8084-4d08fd683693",
+      "id": "c073680c-f55e-4392-8451-dfc8c3551750",
       "kwargs": {
         "column": "dq14_has_record_coherent",
         "value_set": [

@@ -444,7 +444,8 @@ Build the image, start MySQL, and wait for its health check:
 
 ```powershell
 docker compose build
-docker compose up -d
+docker compose up -d 
+#The expected status for airflow-init-1 is exited
 docker compose ps
 ```
 
@@ -521,9 +522,11 @@ if you want to run the notebook of initial profiling you need to install the sep
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirementsnotebook.txt
+# Opens Jupyter Lab in the browser, once you want to exit just do in the console CTRL + C
+jupyter lab notebooks/initial_profiling.ipynb
 ```
 
-if you want to run the notebook of the detailed profiling you need to run this command inside the docker container in which the manual test are made and then execute this command that would create the notebook data_profiling_exec.ipynb (the notebook data_profiling.ipynb is already fully run):
+if you want to run the notebook of the detailed profiling you need to run this command inside the docker container in which the manual test are made and then execute this command that would create the notebook data_profiling_exec.ipynb (the notebook data_profiling.ipynb is already fully run and if it is ran again with the command below the file would be overwritten):
 
 ```powershell
 python scripts/run_notebook.py
